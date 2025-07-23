@@ -1,7 +1,7 @@
 # EASH: Evil ass shell
 EASH (pronounced eeysh, though i would rather have you just say the full name each time) is a TUI based shell that is
 supposed to make the terminal environment more fun and interactive through animation, gradients, etc.
-Performance is Dead. Accesibility is Long-Gone. Adaptibility has been Abandoned. This is all that's left.
+Performance is Dead. Accessibility is Long-Gone. Adaptibility has been Abandoned. This is all that's left.
 
 Currently EASH is hacked together at best. A lot of shortcuts have been taken so if you take one wrong step the program
 will immediately kill itself without warning. Sorry.
