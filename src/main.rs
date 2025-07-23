@@ -110,10 +110,10 @@ struct ChainLink {
     element: Element,
 }
 
-fn calculate_spring_distance(l: &ChainLink, r: &ChainLink) -> u32 {
+fn calculate_spring_distance(l: &ChainLink, r: &ChainLink /* uhm */) -> u32 {
     // spring distance should be size of both of its neighbours / 2 + the spacing between them
     const SPACING: u32 = 2;
-    return ((l.element.get_width() + r.element.get_width()) / 2) + SPACING;
+    return l.element.get_width() + SPACING;
 }
 
 type Chain = Vec<ChainLink>;
@@ -136,7 +136,8 @@ fn calculate_force(chain: &Chain, link_index: usize) -> f32 {
         }
     } else {
         // nudge the starting element to zero, so we can anchor to something
-        let natural_distance = link.element.get_width() / 2 + 2;
+        // will be removed when i figure out how to do this more cleanly
+        let natural_distance = 2;
         let displacement = link.mass.position; // goal position is ZERO!
         force += -SPRING_CONSTANT * (displacement - (natural_distance as f32))
     }
@@ -228,8 +229,7 @@ where
     for item in elements.iter() {
         let element = &item.element;
 
-        let start_position: i32 =
-            item.mass.position.round() as i32 - (element.get_width() as i32 / 2);
+        let start_position: i32 = item.mass.position.round() as i32;
 
         let terminal_position = if start_position >= 0 {
             start_position
@@ -396,12 +396,17 @@ fn main() {
 
                 prompt_text = prompt_text + &c.to_string()[0..];
                 let mut lock = elements.lock().unwrap();
+                lock.get_mut(1).unwrap().mass.velocity += 2.0;
                 lock.get_mut(1).unwrap().element.content = prompt_text.clone();
             }
-            KeyCode::Backspace if !prompt_text.is_empty() => {
-                prompt_text = (&prompt_text[0..prompt_text.len() - 1]).to_string();
+            KeyCode::Backspace => {
                 let mut lock = elements.lock().unwrap();
-                lock.get_mut(1).unwrap().element.content = prompt_text.clone();
+                if !prompt_text.is_empty() {
+                    prompt_text = (&prompt_text[0..prompt_text.len() - 1]).to_string();
+                    lock.get_mut(1).unwrap().element.content = prompt_text.clone();
+                } else {
+                    lock.get_mut(1).unwrap().mass.velocity -= 5.0;
+                }
             }
             _ => {}
         }
