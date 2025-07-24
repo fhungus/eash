@@ -1,3 +1,7 @@
+<p align="center">
+  <img height="500" alt="evil ass floppy" src="https://github.com/user-attachments/assets/78ec94a8-4011-4d50-b41a-a64e3b5341e9" />
+</align>
+
 # EASH: Evil ass shell
 EASH (pronounced eeysh, though i would rather have you just say the full name each time) is a TUI based shell that is
 supposed to make the terminal environment more fun and interactive through animation, gradients, etc.
