@@ -1,20 +1,18 @@
 use crossterm::{
-    cursor::MoveToColumn,
+    cursor::{self, MoveToColumn},
     event::{self, DisableBracketedPaste, Event, KeyCode, KeyEvent, KeyModifiers},
     queue,
     style::{
         Color as ctColor, PrintStyledContent, ResetColor, SetBackgroundColor, SetForegroundColor,
         StyledContent, Stylize,
     },
-    terminal::{self, Clear, ClearType, disable_raw_mode, enable_raw_mode},
+    terminal::{Clear, ClearType, disable_raw_mode, enable_raw_mode},
 };
 
 use std::{
+    io::{Stdout, Write},
     process::exit,
-    sync::{
-        Arc, Mutex, MutexGuard,
-        mpsc::{Receiver, channel},
-    },
+    sync::{Arc, Mutex, MutexGuard},
     thread,
     time::Duration,
 };
@@ -83,19 +81,71 @@ impl Default for VisualState {
     }
 }
 
-struct Element {
+trait Element {
+    fn get_width(&self) -> u32;
+
+    fn render(&self, start_position: i32, w: &mut Stdout);
+}
+
+struct StandardElement {
     state: VisualState,
     content: String,
 }
 
-impl Element {
+impl Element for StandardElement {
     fn get_width(&self) -> u32 {
         return match self.state.width {
             Width::Units(u) => u,
             Width::Minimum(m) => {
-                self.content.len() as u32 + (self.state.padding * 2).clamp(m, u32::MAX)
+                (self.content.len() as u32 + (self.state.padding * 2)).clamp(m, u32::MAX)
             }
         };
+    }
+
+    fn render(&self, start_position: i32, w: &mut Stdout) {
+        let terminal_position = if start_position >= 0 {
+            start_position
+        } else {
+            0
+        };
+        _ = queue!(w, ResetColor, MoveToColumn(terminal_position as u16));
+
+        let vs = &self.state;
+        let mut print_content = self.content.clone();
+
+        // width checking shennanigans
+        print_content = match vs.width {
+            Width::Minimum(m) => {
+                process_print_width_as_min(&print_content, m, vs.padding, &vs.align)
+            }
+            Width::Units(u) => {
+                process_print_width_as_unit(&print_content, u, vs.padding, &vs.align)
+            }
+        };
+
+        // padding
+        let padding = " ".repeat(vs.padding as usize);
+        print_content = format!("{}{}{}", padding, print_content, padding);
+
+        // We shouldn't NEED to do this if both color and background_color are solid, which they usually are.
+        // TODO: just print everything at once if both colors are solid
+        let mut i = 0;
+        for char in print_content.chars() {
+            i = i + 1;
+            if i + start_position < 0 {
+                continue;
+            }
+
+            let distance = i as f32 / print_content.len() as f32;
+            let styled_character = char
+                .to_string()
+                .with(vs.color.to_color_for_char(distance))
+                .on(vs.bg_color.to_color_for_char(distance));
+
+            _ = queue!(w, PrintStyledContent(styled_character));
+        }
+
+        w.flush();
     }
 }
 
@@ -107,9 +157,10 @@ struct ChainMass {
 
 struct ChainLink {
     mass: ChainMass,
-    element: Element,
+    element: Box<dyn Element + Send + Sync>,
 }
 
+// ignoring the r until we have to anchor shit to the right
 fn calculate_spring_distance(l: &ChainLink, r: &ChainLink /* uhm */) -> u32 {
     // spring distance should be size of both of its neighbours / 2 + the spacing between them
     const SPACING: u32 = 2;
@@ -119,8 +170,8 @@ fn calculate_spring_distance(l: &ChainLink, r: &ChainLink /* uhm */) -> u32 {
 type Chain = Vec<ChainLink>;
 
 // THERE IS SOMETHING HORRIFICALLY WRONG WITH MY SPRING SIMULATION
-const SPRING_CONSTANT: f32 = 0.3;
-const SPRING_DAMPING: f32 = 0.8;
+const SPRING_CONSTANT: f32 = 0.8;
+const SPRING_DAMPING: f32 = 0.1;
 
 fn calculate_force(chain: &Chain, link_index: usize) -> f32 {
     let link = &chain[link_index];
@@ -220,59 +271,11 @@ fn process_print_width_as_min(
     return print_content.to_string();
 }
 
-fn render<'a, W>(w: &mut W, elements: &MutexGuard<Chain>)
-where
-    W: std::io::Write,
-{
+fn render<'a>(w: &mut Stdout, elements: &MutexGuard<Chain>) {
     _ = queue!(w, MoveToColumn(0), Clear(ClearType::CurrentLine));
 
     for item in elements.iter() {
-        let element = &item.element;
-
-        let start_position: i32 = item.mass.position.round() as i32;
-
-        let terminal_position = if start_position >= 0 {
-            start_position
-        } else {
-            0
-        };
-        _ = queue!(w, ResetColor, MoveToColumn(terminal_position as u16));
-
-        let vs = &element.state;
-        let mut print_content = element.content.clone();
-
-        // width checking shennanigans
-        print_content = match vs.width {
-            Width::Minimum(m) => {
-                process_print_width_as_min(&print_content, m, vs.padding, &vs.align)
-            }
-            Width::Units(u) => {
-                process_print_width_as_unit(&print_content, u, vs.padding, &vs.align)
-            }
-        };
-
-        // padding
-        let padding = " ".repeat(vs.padding as usize);
-        print_content = format!("{}{}{}", padding, print_content, padding);
-
-        // We shouldn't NEED to do this if both color and background_color are solid, which they usually are.
-        // TODO: just print everything at once if both colors are solid
-        let mut i = 0;
-        for char in print_content.chars() {
-            i = i + 1;
-            if i + start_position < 0 {
-                continue;
-            }
-
-            let distance = i as f32 / print_content.len() as f32;
-            let styled_character = char
-                .to_string()
-                .with(vs.color.to_color_for_char(distance))
-                .on(vs.bg_color.to_color_for_char(distance));
-
-            _ = queue!(w, PrintStyledContent(styled_character));
-        }
-        _ = w.flush();
+        item.element.render(item.mass.position.round() as i32, w);
     }
 }
 
@@ -301,11 +304,90 @@ fn render_thread(element_mutex: Arc<Mutex<Chain>>) {
             loop {
                 thread::sleep(Duration::from_millis(1000 / 60)); // i hate this
                 let mut lock = element_mutex.lock().unwrap();
-                step_links(&mut lock, 1.0);
+                step_links(&mut lock, 1.0 / 60.0);
                 render(&mut stdout, &lock);
             }
         })
         .expect("erm.... what the thread?");
+}
+
+struct Prompt {
+    cursor_position: u16,
+    prompt: String,
+    selection_start: Option<u16>, // if None, then there is no selection
+}
+
+struct Selection {
+    start: u16,
+    end: u16,
+}
+
+enum Direction {
+    Left,
+    Right,
+}
+
+impl Prompt {
+    fn start_selection(&mut self) {
+        self.selection_start = Some(self.cursor_position);
+    }
+
+    fn find_skippable_in_direction(&self, direction: Direction) -> u16 {
+        let increment = match direction {
+            Direction::Left => -1,
+            Direction::Right => 1,
+        };
+
+        let mut i = self.cursor_position as i16;
+        loop {
+            i = i + increment;
+            if i <= 1 {
+                return 1;
+            }
+
+            // check if THIS character is "skippable", if it is, set cursor_pos and return here
+            // TODO: make this part support utf16, mostly just in case i need it in the future
+            // TODO: (also) do this just generally better
+            let bytes = self.prompt.as_bytes()[i as usize];
+            if ' ' as u8 == bytes || '/' as u8 == bytes || '=' as u8 == bytes {
+                return i as u16;
+            }
+        }
+    }
+
+    fn jump_in_direction(&mut self, direction: Direction) {
+        let jump_to = self.find_skippable_in_direction(direction);
+        self.cursor_position = jump_to;
+    }
+
+    fn ctrl_backspace(&mut self) {
+        let cut_position = self.find_skippable_in_direction(Direction::Left);
+        if cut_position == self.cursor_position {
+            return;
+        };
+
+        let left_side = &self.prompt[0..cut_position as usize];
+        let right_side = &self.prompt[self.cursor_position as usize..];
+
+        self.prompt = format!("{}{}", left_side, right_side);
+        self.cursor_position = cut_position;
+    }
+
+    fn move_cursor(&mut self, space: u32, direction: Direction) {
+        // would it be cursed if we could cast direction into a i16?
+        let neg = match direction {
+            Direction::Left => -1,
+            Direction::Right => 1,
+        };
+
+        let new_position = (self.cursor_position as i16 + (space as i16 * neg)) as u16;
+        if new_position <= 1 {
+            self.cursor_position = 1;
+            return;
+        } else if new_position >= self.prompt.len() as u16 {
+            self.cursor_position = self.prompt.len() as u16;
+        }
+    }
 }
 
 fn main() {
@@ -316,7 +398,7 @@ fn main() {
                 position: 0.0,
                 velocity: 0.0,
             },
-            element: Element {
+            element: Box::new(StandardElement {
                 content: "Garish ass gradients".to_string(),
                 state: VisualState {
                     align: Alignment::Right,
@@ -347,7 +429,7 @@ fn main() {
                         },
                     ),
                 },
-            },
+            }),
         },
         ChainLink {
             mass: ChainMass {
@@ -355,8 +437,8 @@ fn main() {
                 position: 0.0,
                 velocity: 0.0,
             },
-            element: Element {
-                content: "textiticus".to_string(),
+            element: Box::new(StandardElement {
+                content: "sporticus".to_string(),
                 state: VisualState {
                     align: Alignment::Left,
                     width: Width::Minimum(0),
@@ -368,7 +450,7 @@ fn main() {
                         b: 255,
                     }),
                 },
-            },
+            }),
         },
     ]));
 
@@ -378,6 +460,11 @@ fn main() {
 
     enable_raw_mode().expect("Oh mah gawd.");
 
+    let mut prompt = Prompt {
+        cursor_position: 1,
+        prompt: "".to_string(),
+        selection_start: None,
+    };
     loop {
         let keypress_event = read_ct_keypress_event(event::read());
         if keypress_event == None {
@@ -394,19 +481,19 @@ fn main() {
                     };
                 }
 
-                prompt_text = prompt_text + &c.to_string()[0..];
-                let mut lock = elements.lock().unwrap();
-                lock.get_mut(1).unwrap().mass.velocity += 2.0;
-                lock.get_mut(1).unwrap().element.content = prompt_text.clone();
+                // prompt_text = prompt_text + &c.to_string()[0..];
+                // let mut lock = elements.lock().unwrap();
+                // lock.get_mut(1).unwrap().mass.velocity += 2.0;
+                // lock.get_mut(1).unwrap().element.content = prompt_text.clone();
             }
             KeyCode::Backspace => {
-                let mut lock = elements.lock().unwrap();
-                if !prompt_text.is_empty() {
-                    prompt_text = (&prompt_text[0..prompt_text.len() - 1]).to_string();
-                    lock.get_mut(1).unwrap().element.content = prompt_text.clone();
-                } else {
-                    lock.get_mut(1).unwrap().mass.velocity -= 5.0;
-                }
+                // let mut lock = elements.lock().unwrap();
+                // if !prompt_text.is_empty() {
+                //     prompt_text = (&prompt_text[0..prompt_text.len() - 1]).to_string();
+                //     lock.get_mut(1).unwrap().element.content = prompt_text.clone();
+                // } else {
+                //     lock.get_mut(1).unwrap().mass.velocity -= 5.0;
+                // }
             }
             _ => {}
         }
