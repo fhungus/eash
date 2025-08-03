@@ -131,6 +131,14 @@ fn main() {
     enable_raw_mode().expect("Oh mah gawd.");
     render_thread(elements.clone());
 
+    fn bump(elements: &Arc<Mutex<Chain>>, velocity: f32, direction: Direction) {
+        let mut lock = elements.lock().unwrap();
+        lock[1].mass.velocity += match direction {
+            Direction::Left => velocity * -1.0,
+            Direction::Right => velocity,
+        }
+    }
+
     loop {
         let keypress_event = read_ct_keypress_event(event::read());
         if keypress_event == None {
@@ -149,24 +157,41 @@ fn main() {
                 }
 
                 if c == 'w' && keypress_event.modifiers.contains(KeyModifiers::CONTROL) {
-                    lock.ctrl_backspace();
+                    if lock.ctrl_backspace() {
+                        bump(&elements, 50.0, Direction::Left);
+                    }
                     continue;
                 }
 
                 lock.insert_character(c);
             }
             KeyCode::Backspace => {
-                lock.backspace();
+                // run the backspace function, bump it harder if it returns true
+                if lock.backspace() {
+                    bump(&elements, 30.0, Direction::Left);
+                } else {
+                    bump(&elements, 10.0, Direction::Left);
+                }
             }
             KeyCode::Left => {
                 let shift = keypress_event.modifiers.contains(KeyModifiers::SHIFT);
                 let ctrl = keypress_event.modifiers.contains(KeyModifiers::CONTROL);
-                lock.horiziontal_arrow(Direction::Left, shift, ctrl);
+                // run the arrow function, bump it harder if it returns true
+                if lock.horiziontal_arrow(Direction::Left, shift, ctrl) {
+                    bump(&elements, 30.0, Direction::Left);
+                } else {
+                    bump(&elements, 10.0, Direction::Left);
+                }
             }
             KeyCode::Right => {
                 let shift = keypress_event.modifiers.contains(KeyModifiers::SHIFT);
                 let ctrl = keypress_event.modifiers.contains(KeyModifiers::CONTROL);
-                lock.horiziontal_arrow(Direction::Right, shift, ctrl);
+                // run the arrow function, bump it harder if it returns true
+                if lock.horiziontal_arrow(Direction::Right, shift, ctrl) {
+                    bump(&elements, 30.0, Direction::Right);
+                } else {
+                    bump(&elements, 10.0, Direction::Right);
+                }
             }
             _ => {}
         }

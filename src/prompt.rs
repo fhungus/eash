@@ -34,8 +34,10 @@ impl Prompt {
         let mut i = self.cursor_position as i16;
         loop {
             i = i + increment;
-            if i <= 0 {
+            if i <= 0 || self.prompt.len() <= 0 {
                 return 0;
+            } else if i >= self.prompt.len() as i16 {
+                return self.prompt.len() as u16;
             }
 
             // check if THIS character is "skippable", if it is, set cursor_pos and return here
@@ -78,13 +80,16 @@ impl Prompt {
             Direction::Right => 1,
         };
 
-        let new_position = (self.cursor_position as i16 + (space as i16 * neg)) as u16;
-        if new_position <= 1 {
-            self.cursor_position = 1;
+        let new_position = self.cursor_position as i16 + (space as i16 * neg);
+        if new_position <= 0 {
+            self.cursor_position = 0;
             return;
-        } else if new_position >= self.prompt.len() as u16 {
+        } else if new_position >= (self.prompt.len() as i16) {
             self.cursor_position = self.prompt.len() as u16;
+            return;
         }
+
+        self.cursor_position = new_position as u16
     }
 
     // handle left & right
@@ -166,6 +171,8 @@ impl Prompt {
             ""
         };
 
+        self.selection_start = None;
+        self.cursor_position = (smaller - 1) as u16;
         self.prompt = format!("{}{}", first, second);
 
         return bump;
