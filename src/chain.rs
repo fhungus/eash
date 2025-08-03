@@ -71,7 +71,7 @@ pub struct ChainLink {
 }
 
 // ignoring the r until we have to anchor shit to the right
-fn calculate_spring_distance(l: &ChainLink, r: &ChainLink /* uhm */) -> u32 {
+fn calculate_spring_distance(l: &ChainLink, _r: &ChainLink /* uhm */) -> u32 {
     // spring distance should be size of both of its neighbours / 2 + the spacing between them
     const SPACING: u32 = 2;
     return l.element.get_width() + SPACING;

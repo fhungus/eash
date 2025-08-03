@@ -34,14 +34,14 @@ impl Prompt {
         let mut i = self.cursor_position as i16;
         loop {
             i = i + increment;
-            if i <= 1 {
-                return 1;
+            if i <= 0 {
+                return 0;
             }
 
             // check if THIS character is "skippable", if it is, set cursor_pos and return here
             // TODO: make this part support utf16, mostly just in case i need it in the future
             // TODO: (also) do this just generally better
-            let bytes = self.prompt.as_bytes()[i as usize];
+            let bytes = self.prompt.as_bytes()[(i - 1) as usize];
             if ' ' as u8 == bytes || '/' as u8 == bytes || '=' as u8 == bytes {
                 return i as u16;
             }
@@ -87,6 +87,23 @@ impl Prompt {
         }
     }
 
+    // handle left & right
+    // returns whether to "bump" or not
+    pub fn horiziontal_arrow(&mut self, direction: Direction, shift: bool, ctrl: bool) -> bool {
+        if shift && self.selection_start.is_none() {
+            self.start_selection();
+        }
+
+        let prev = self.cursor_position;
+        if ctrl {
+            self.jump_in_direction(direction);
+        } else {
+            self.move_cursor(1, direction);
+        }
+
+        return prev == self.cursor_position;
+    }
+
     // insert a character at the cursors current position
     pub fn insert_character(&mut self, character: char) {
         // if we're at or past the end of the string just append
@@ -103,7 +120,7 @@ impl Prompt {
     // delete character at cursor position
     // returns whether to "bump" or not
     pub fn delete_character(&mut self) -> bool {
-        if self.prompt.len() == 0 || self.cursor_position <= 1 {
+        if self.prompt.len() == 0 || self.cursor_position <= 0 {
             return true;
         }
 
@@ -156,13 +173,9 @@ impl Prompt {
 
     // handles all backspace logic
     // returns whether to "bump" or not
-    pub fn backspace(&mut self, ctrl: bool) -> bool {
+    pub fn backspace(&mut self) -> bool {
         if self.selection_start.is_some() {
             return self.delete_selection();
-        }
-
-        if ctrl {
-            return self.ctrl_backspace();
         }
 
         if self.cursor_position <= 0 {

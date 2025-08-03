@@ -46,6 +46,15 @@ impl Element for PromptElement {
             .expect("Cannot print character");
         }
 
+        // this won't work if we have any elements rendering after the prompt, this is a placeholder
+        if start_position >= 0 {
+            queue!(
+                w,
+                MoveToColumn(start_position as u16 + lock.cursor_position)
+            )
+            .expect("Cannot print MoveToColumn");
+        }
+
         w.flush()
             .expect("george orwell 1984 has FORBID me from flushing...");
     }

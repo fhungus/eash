@@ -1,6 +1,6 @@
 use eash::chain::{Chain, ChainLink, ChainMass, step_links};
 use eash::elements::{prompt_element::PromptElement, standard_element::StandardElement};
-use eash::misc_types::{Alignment, Color, HexColor, VisualState, Width};
+use eash::misc_types::{Alignment, Color, Direction, HexColor, VisualState, Width};
 use eash::prompt::Prompt;
 
 use crossterm::{
@@ -11,7 +11,7 @@ use crossterm::{
 };
 
 use std::{
-    io::{Stdout, Write},
+    io::Stdout,
     panic::{set_hook, take_hook},
     process::exit,
     sync::{Arc, Mutex, MutexGuard},
@@ -46,8 +46,6 @@ fn read_ct_keypress_event(event_result: std::io::Result<Event>) -> Option<KeyEve
         return None;
     }
 
-    // for now, we aren't going to handle key holding, mouse movements and the like.
-    // maybe soon.
     return event_result.unwrap().as_key_event();
 }
 
@@ -140,6 +138,7 @@ fn main() {
         };
         let keypress_event = keypress_event.unwrap();
 
+        let mut lock = prompt.lock().unwrap();
         match keypress_event.code {
             KeyCode::Char(c) => {
                 if c == 'c' {
@@ -149,15 +148,26 @@ fn main() {
                     };
                 }
 
-                let mut lock = prompt.lock().unwrap();
+                if c == 'w' && keypress_event.modifiers.contains(KeyModifiers::CONTROL) {
+                    lock.ctrl_backspace();
+                    continue;
+                }
+
                 lock.insert_character(c);
             }
             KeyCode::Backspace => {
-                let mut lock = prompt.lock().unwrap();
-                lock.backspace(keypress_event.modifiers.contains(KeyModifiers::CONTROL));
+                lock.backspace();
             }
-            KeyCode::Left => {}
-            KeyCode::Right => {}
+            KeyCode::Left => {
+                let shift = keypress_event.modifiers.contains(KeyModifiers::SHIFT);
+                let ctrl = keypress_event.modifiers.contains(KeyModifiers::CONTROL);
+                lock.horiziontal_arrow(Direction::Left, shift, ctrl);
+            }
+            KeyCode::Right => {
+                let shift = keypress_event.modifiers.contains(KeyModifiers::SHIFT);
+                let ctrl = keypress_event.modifiers.contains(KeyModifiers::CONTROL);
+                lock.horiziontal_arrow(Direction::Right, shift, ctrl);
+            }
             _ => {}
         }
     }
