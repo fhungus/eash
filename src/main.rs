@@ -1,26 +1,31 @@
 use eash::chain::{Chain, ChainLink, ChainMass, step_links};
-use eash::elements::{Element, prompt_element::PromptElement, standard_element::StandardElement};
+use eash::elements::{prompt_element::PromptElement, standard_element::StandardElement};
 use eash::misc_types::{Alignment, Color, HexColor, VisualState, Width};
 use eash::prompt::Prompt;
 
 use crossterm::{
-    cursor::{self, MoveToColumn},
-    event::{self, DisableBracketedPaste, Event, KeyCode, KeyEvent, KeyModifiers},
+    cursor::MoveToColumn,
+    event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
     queue,
-    style::{
-        Color as ctColor, PrintStyledContent, ResetColor, SetBackgroundColor, SetForegroundColor,
-        StyledContent, Stylize,
-    },
     terminal::{Clear, ClearType, disable_raw_mode, enable_raw_mode},
 };
 
 use std::{
     io::{Stdout, Write},
+    panic::{set_hook, take_hook},
     process::exit,
     sync::{Arc, Mutex, MutexGuard},
     thread,
     time::Duration,
 };
+
+fn init_panic_hook() {
+    let original_hook = take_hook();
+    set_hook(Box::new(move |info| {
+        let _ = disable_raw_mode();
+        original_hook(info);
+    }));
+}
 
 fn render<'a>(w: &mut Stdout, elements: &MutexGuard<Chain>) {
     _ = queue!(w, MoveToColumn(0), Clear(ClearType::CurrentLine));
@@ -63,11 +68,21 @@ fn render_thread(element_mutex: Arc<Mutex<Chain>>) {
 }
 
 fn main() {
+    // just disables raw mode when we panic
+    init_panic_hook();
+
+    // i feel like arc<mutex<T>>'s are sheltering me from a cruel and inhuman data management fact
+    let prompt = Arc::new(Mutex::new(Prompt {
+        cursor_position: 0,
+        prompt: "".to_string(),
+        selection_start: None,
+    }));
+
     let elements = Arc::new(Mutex::new(vec![
         ChainLink {
             mass: ChainMass {
                 mass: 0.5,
-                position: 0.0,
+                position: -30.0,
                 velocity: 0.0,
             },
             element: Box::new(StandardElement {
@@ -106,37 +121,18 @@ fn main() {
         ChainLink {
             mass: ChainMass {
                 mass: 1.0,
-                position: 0.0,
+                position: -30.0,
                 velocity: 0.0,
             },
-            element: Box::new(StandardElement {
-                content: "sporticus".to_string(),
-                state: VisualState {
-                    align: Alignment::Left,
-                    width: Width::Minimum(0),
-                    padding: 2,
-                    bg_color: Color::Transparent,
-                    color: Color::Solid(HexColor {
-                        r: 255,
-                        g: 255,
-                        b: 255,
-                    }),
-                },
+            element: Box::new(PromptElement {
+                prompt: prompt.clone(),
             }),
         },
     ]));
 
+    enable_raw_mode().expect("Oh mah gawd.");
     render_thread(elements.clone());
 
-    let mut prompt_text = String::new();
-
-    enable_raw_mode().expect("Oh mah gawd.");
-
-    let mut prompt = Prompt {
-        cursor_position: 1,
-        prompt: "".to_string(),
-        selection_start: None,
-    };
     loop {
         let keypress_event = read_ct_keypress_event(event::read());
         if keypress_event == None {
@@ -153,20 +149,15 @@ fn main() {
                     };
                 }
 
-                // prompt_text = prompt_text + &c.to_string()[0..];
-                // let mut lock = elements.lock().unwrap();
-                // lock.get_mut(1).unwrap().mass.velocity += 2.0;
-                // lock.get_mut(1).unwrap().element.content = prompt_text.clone();
+                let mut lock = prompt.lock().unwrap();
+                lock.insert_character(c);
             }
             KeyCode::Backspace => {
-                // let mut lock = elements.lock().unwrap();
-                // if !prompt_text.is_empty() {
-                //     prompt_text = (&prompt_text[0..prompt_text.len() - 1]).to_string();
-                //     lock.get_mut(1).unwrap().element.content = prompt_text.clone();
-                // } else {
-                //     lock.get_mut(1).unwrap().mass.velocity -= 5.0;
-                // }
+                let mut lock = prompt.lock().unwrap();
+                lock.backspace(keypress_event.modifiers.contains(KeyModifiers::CONTROL));
             }
+            KeyCode::Left => {}
+            KeyCode::Right => {}
             _ => {}
         }
     }

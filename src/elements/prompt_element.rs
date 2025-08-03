@@ -1,6 +1,7 @@
 use crate::elements::element_trait::Element;
 use crate::prompt::Prompt;
 use crossterm::{
+    cursor::MoveToColumn,
     queue,
     style::{PrintStyledContent, Stylize},
 };
@@ -8,7 +9,7 @@ use std::io::{Stdout, Write};
 use std::sync::{Arc, Mutex};
 
 pub struct PromptElement {
-    prompt: Arc<Mutex<Prompt>>,
+    pub prompt: Arc<Mutex<Prompt>>,
 }
 
 impl Element for PromptElement {
@@ -37,7 +38,12 @@ impl Element for PromptElement {
                 formatted = formatted.on_white().black();
             }
 
-            queue!(w, PrintStyledContent(formatted)).expect("Cannot print character");
+            queue!(
+                w,
+                MoveToColumn(start_position as u16 + i as u16),
+                PrintStyledContent(formatted)
+            )
+            .expect("Cannot print character");
         }
 
         w.flush()

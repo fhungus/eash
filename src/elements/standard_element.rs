@@ -51,7 +51,7 @@ impl Element for StandardElement {
         print_content = format!("{}{}{}", padding, print_content, padding);
 
         // We shouldn't NEED to do this if both color and background_color are solid, which they usually are.
-        // TODO: just print everything at once if both colors are solid
+        // [TODO] just print everything at once if both colors are solid
         let mut i = 0;
         for char in print_content.chars() {
             i = i + 1;

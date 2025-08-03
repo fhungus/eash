@@ -3,9 +3,9 @@ use std::sync::MutexGuard;
 
 pub type Chain = Vec<ChainLink>;
 
-// TODO: configuration
-const SPRING_CONSTANT: f32 = 0.8;
-const SPRING_DAMPING: f32 = 0.1;
+// [TODO] configuration
+const SPRING_CONSTANT: f32 = 1.0;
+const SPRING_DAMPING: f32 = 0.05;
 
 pub fn calculate_force(chain: &Chain, link_index: usize) -> f32 {
     let link = &chain[link_index];

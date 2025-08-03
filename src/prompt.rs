@@ -11,6 +11,7 @@ impl Prompt {
         self.selection_start = Some(self.cursor_position);
     }
 
+    // check if a selection even exists, and if so whether the position in the prompt is within aformentioned selection
     pub fn position_is_in_selection(&self, position: u16) -> bool {
         match self.selection_start {
             Some(start) => {
@@ -47,15 +48,17 @@ impl Prompt {
         }
     }
 
+    // move cursor forwards or backwards a "word" (actually a bit more than that)
     pub fn jump_in_direction(&mut self, direction: Direction) {
         let jump_to = self.find_skippable_in_direction(direction);
         self.cursor_position = jump_to;
     }
 
-    pub fn ctrl_backspace(&mut self) {
+    // them funny skipping motions
+    pub fn ctrl_backspace(&mut self) -> bool {
         let cut_position = self.find_skippable_in_direction(Direction::Left);
         if cut_position == self.cursor_position {
-            return;
+            return self.delete_character();
         };
 
         let left_side = &self.prompt[0..cut_position as usize];
@@ -63,8 +66,11 @@ impl Prompt {
 
         self.prompt = format!("{}{}", left_side, right_side);
         self.cursor_position = cut_position;
+
+        return false;
     }
 
+    // move the cursor in the direction, space times
     pub fn move_cursor(&mut self, space: u32, direction: Direction) {
         // would it be cursed if we could cast direction into a i16?
         let neg = match direction {
@@ -79,5 +85,92 @@ impl Prompt {
         } else if new_position >= self.prompt.len() as u16 {
             self.cursor_position = self.prompt.len() as u16;
         }
+    }
+
+    // insert a character at the cursors current position
+    pub fn insert_character(&mut self, character: char) {
+        // if we're at or past the end of the string just append
+        if self.cursor_position >= self.prompt.len() as u16 {
+            self.prompt.push(character);
+            self.cursor_position = self.prompt.len() as u16;
+        } else {
+            self.prompt
+                .insert((self.cursor_position) as usize, character);
+            self.cursor_position += 1;
+        }
+    }
+
+    // delete character at cursor position
+    // returns whether to "bump" or not
+    pub fn delete_character(&mut self) -> bool {
+        if self.prompt.len() == 0 || self.cursor_position <= 1 {
+            return true;
+        }
+
+        if self.cursor_position >= self.prompt.len() as u16 {
+            self.prompt.pop();
+        } else {
+            self.prompt.remove((self.cursor_position - 1) as usize);
+        }
+
+        if self.cursor_position != 0 {
+            self.cursor_position -= 1;
+        }
+
+        return false;
+    }
+
+    // delete whatever is selected at the current moment (will panic if there is no selection)
+    // returns whether to "bump" or not
+    pub fn delete_selection(&mut self) -> bool {
+        let selection = self.selection_start.expect(
+            "i should've checked whether a selection EXISTED before calling this function.",
+        );
+
+        // might need this more often
+        let (smaller, bigger) = if selection > self.cursor_position {
+            (self.cursor_position as usize, selection as usize)
+        } else {
+            (selection as usize, self.cursor_position as usize)
+        };
+
+        let mut bump = false;
+
+        let first = if smaller > 0 {
+            &self.prompt[0..smaller - 1]
+        } else {
+            bump = true;
+            ""
+        };
+
+        let second = if bigger < self.prompt.len() {
+            &self.prompt[bigger + 1..]
+        } else {
+            ""
+        };
+
+        self.prompt = format!("{}{}", first, second);
+
+        return bump;
+    }
+
+    // handles all backspace logic
+    // returns whether to "bump" or not
+    pub fn backspace(&mut self, ctrl: bool) -> bool {
+        if self.selection_start.is_some() {
+            return self.delete_selection();
+        }
+
+        if ctrl {
+            return self.ctrl_backspace();
+        }
+
+        if self.cursor_position <= 0 {
+            return true;
+        }
+
+        self.delete_character();
+
+        return false;
     }
 }
