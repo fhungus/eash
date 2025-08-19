@@ -1,6 +1,7 @@
 use eash::chain::{Chain, ChainLink, ChainMass, step_links};
-use eash::elements::{prompt_element::PromptElement, standard_element::StandardElement};
+use eash::element::Element;
 use eash::misc_types::{Alignment, Color, Direction, HexColor, VisualState, Width};
+use eash::new_element;
 use eash::prompt::Prompt;
 
 use crossterm::{
@@ -11,12 +12,12 @@ use crossterm::{
 };
 
 use std::{
-    io::Stdout,
+    io::{Stdout, Write},
     panic::{set_hook, take_hook},
     process::exit,
     sync::{Arc, Mutex, MutexGuard},
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 fn init_panic_hook() {
@@ -27,14 +28,15 @@ fn init_panic_hook() {
     }));
 }
 
-fn render<'a>(w: &mut Stdout, elements: &MutexGuard<Chain>) {
+fn render<'a, W: Write + Send>(w: &mut W, elements: &MutexGuard<Chain>) {
     _ = queue!(w, MoveToColumn(0), Clear(ClearType::CurrentLine));
 
-    for item in elements.iter() {
-        item.element.render(item.mass.position.round() as i32, w);
+    for item in elements.links.iter() {
+        
     }
 }
 
+// TODO)) right now this just kind turns the result into an option... probably don't need this.
 fn read_ct_keypress_event(event_result: std::io::Result<Event>) -> Option<KeyEvent> {
     // if we recieved an error just return.
     if event_result.is_err() {
@@ -49,17 +51,18 @@ fn read_ct_keypress_event(event_result: std::io::Result<Event>) -> Option<KeyEve
     return event_result.unwrap().as_key_event();
 }
 
-fn render_thread(element_mutex: Arc<Mutex<Chain>>) {
+fn render_thread<W: Write + Send + 'static>(element_mutex: Arc<Mutex<Chain>>, w: W) {
+    let mut w = w;
     thread::Builder::new()
         .name("Rendering".to_string())
         .spawn(move || {
-            let mut stdout = std::io::stdout();
-
+            let mut instant = Instant::now();
             loop {
-                thread::sleep(Duration::from_millis(1000 / 60)); // i hate this
+                thread::sleep(Duration::from_millis(1000 / 60)); // TODO)) make configurable
                 let mut lock = element_mutex.lock().unwrap();
-                step_links(&mut lock, 1.0 / 60.0);
-                render(&mut stdout, &lock);
+                step_links(&mut lock, instant.elapsed().as_nanos() as f32 * 1e-9);
+                render(&mut w, &lock);
+                instant = Instant::now();
             }
         })
         .expect("erm.... what the thread?");
@@ -83,38 +86,7 @@ fn main() {
                 position: -30.0,
                 velocity: 0.0,
             },
-            element: Box::new(StandardElement {
-                content: "Garish ass gradients".to_string(),
-                state: VisualState {
-                    align: Alignment::Right,
-                    width: Width::Minimum(0),
-                    padding: 2,
-                    bg_color: Color::Gradient(
-                        HexColor {
-                            r: 111,
-                            g: 30,
-                            b: 70,
-                        },
-                        HexColor {
-                            r: 46,
-                            g: 39,
-                            b: 98,
-                        },
-                    ),
-                    color: Color::Gradient(
-                        HexColor {
-                            r: 244,
-                            g: 209,
-                            b: 76,
-                        },
-                        HexColor {
-                            r: 109,
-                            g: 234,
-                            b: 98,
-                        },
-                    ),
-                },
-            }),
+            element: new_element!(Stdout, "wung", render_thread, render_thread),
         },
         ChainLink {
             mass: ChainMass {
@@ -122,16 +94,16 @@ fn main() {
                 position: -30.0,
                 velocity: 0.0,
             },
-            element: Box::new(PromptElement {
+            element: Box::new(Element {
                 prompt: prompt.clone(),
             }),
         },
     ]));
 
     enable_raw_mode().expect("Oh mah gawd.");
-    render_thread(elements.clone());
+    render_thread(elements.clone(), std::io::stdout());
 
-    fn bump(elements: &Arc<Mutex<Chain>>, velocity: f32, direction: Direction) {
+    fn bump<W: Write + Send>(elements: &Arc<Mutex<Chain<W>>>, velocity: f32, direction: Direction) {
         let mut lock = elements.lock().unwrap();
         lock[1].mass.velocity += match direction {
             Direction::Left => velocity * -1.0,
@@ -156,7 +128,9 @@ fn main() {
                     };
                 }
 
-                if c == 'w' && keypress_event.modifiers.contains(KeyModifiers::CONTROL) {
+                if (c == 'w' || c == 'h' || c == '7')
+                    && keypress_event.modifiers.contains(KeyModifiers::CONTROL)
+                {
                     if lock.ctrl_backspace() {
                         bump(&elements, 50.0, Direction::Left);
                     }

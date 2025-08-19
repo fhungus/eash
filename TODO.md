@@ -12,10 +12,10 @@ Features that I am going to work on/considering.
 - Making it an actual semi-working shell (I HAVEN'T EVEN STARTED THIS YET!!! 😭😭😭)
 - Actual shell features (piping, exports, functions, etc.)
 - ls but cool
-- cd & mv show something when ran, like "Changed directory to 📁 ~/Downloads.", "Moved
-- nice looking errors (like nushell)
+- cd & mv show something when ran, like "Changed directory to 📁 ~/Downloads.", "Moved 📄 fuckenheimer.txt -> ~/Downloads/Sexmeister/"
+- Nice looking errors (like nushell)
 - Graceful shutdown & error handling
-- I NEED TO SPLIT IT INTO MULTIPLE FILES IT'S ALREADY GETTING KIND OF ANNOYING
 
-# ARCHITECTURAL
+# ARCHITECTURAL / PERFORMANCE
 - Printing & Rendering abstraction so i'm not printing characters one at a time.
+- Change the integer types for the terminal to u16 or maybe usize.

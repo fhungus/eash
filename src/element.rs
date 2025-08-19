@@ -1,24 +1,34 @@
 use crate::{
     error::EASHError,
-    misc_types::{VisualState, Width, process_print_width_as_min, process_print_width_as_unit},
+    misc_types::{
+        Direction, Glyph, VisualState, Width, process_print_width_as_min,
+        process_print_width_as_unit,
+    },
+    prompt::Prompt,
 };
 use crossterm::{cursor::MoveToColumn, queue, style::ResetColor};
 use std::io::Write;
 
-pub struct Element<W: Write + Send> {
-    pub id: String,
-    pub render: Box<dyn Fn(&mut W, u16) -> Result<(), EASHError> + Send>,
-    pub get_width: Box<dyn Fn() -> u16 + Send>,
+pub enum TriggerType {
+    EveryFrame,
+    PromptUpdate,
+    Timed(f32), // seconds
 }
 
-// good enough ig
-#[macro_use]
-macro_rules! new_element {
-    ($id:literal, $r:item, $gw: item) => {
-        Element {
-            id: $id,
-            render: Box::new($r),
-            get_width: Box::new($gw),
-        }
-    };
+pub struct BasicElement {
+    visual_state: VisualState,
+    content: String,
+}
+
+pub struct ElementWithGlyph {
+    visual_state: VisualState,
+    element: Glyph,
+    glyph: Glyph,
+    direction: Direction,
+}
+
+pub enum ElementType {
+    BasicElement(Glyph),
+    ElementWithGlyph(ElementWithGlyph),
+    Prompt(Prompt),
 }

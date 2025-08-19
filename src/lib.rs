@@ -1,4 +1,5 @@
 pub mod chain;
-pub mod elements;
+pub mod element;
+pub mod error;
 pub mod misc_types;
 pub mod prompt;

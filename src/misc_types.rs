@@ -45,6 +45,9 @@ pub enum Width {
     Minimum(u32),
 }
 
+// temporary until i figure out what a glyph should be
+pub type Glyph = char;
+
 pub fn process_print_width_as_unit(
     print_content: &str,
     u: u32,
