@@ -19,7 +19,7 @@ pub fn calculate_force(chain: &Chain, link_index: usize) -> f32 {
     // we could DRY this out, right?
     if link_index != 0 {
         if let Some(left_neighbour) = chain.links.get(link_index - 1) {
-            let natural_distance = calculate_spring_distance(chain.spacing, link);
+            let natural_distance = calculate_spring_distance(chain.spacing, left_neighbour);
             let displacement = link.mass.position - left_neighbour.mass.position;
             force += -SPRING_CONSTANT * (displacement - (natural_distance as f32));
         }
