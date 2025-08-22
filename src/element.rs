@@ -1,34 +1,23 @@
 use crate::{
-    error::EASHError,
-    misc_types::{
-        Direction, Glyph, VisualState, Width, process_print_width_as_min,
-        process_print_width_as_unit,
-    },
+    misc_types::{Direction, Glyph, VisualState},
     prompt::Prompt,
 };
-use crossterm::{cursor::MoveToColumn, queue, style::ResetColor};
-use std::io::Write;
-
-pub enum TriggerType {
-    EveryFrame,
-    PromptUpdate,
-    Timed(f32), // seconds
-}
+use std::sync::{Arc, Mutex};
 
 pub struct BasicElement {
-    visual_state: VisualState,
-    content: String,
+    pub visual_state: VisualState,
+    pub content: String,
 }
 
 pub struct ElementWithGlyph {
-    visual_state: VisualState,
-    element: Glyph,
-    glyph: Glyph,
-    direction: Direction,
+    pub visual_state: VisualState,
+    pub element: Glyph,
+    pub glyph: Glyph,
+    pub direction: Direction,
 }
 
 pub enum ElementType {
-    BasicElement(Glyph),
-    ElementWithGlyph(ElementWithGlyph),
-    Prompt(Prompt),
+    BasicElement(BasicElement),
+    // ElementWithGlyph(ElementWithGlyph),
+    Prompt(Arc<Mutex<Prompt>>),
 }

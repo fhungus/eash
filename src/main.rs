@@ -1,8 +1,11 @@
+use crossterm::style::{
+    Print, PrintStyledContent, ResetColor, SetBackgroundColor, SetForegroundColor, Stylize,
+};
 use eash::chain::{Chain, ChainLink, ChainMass, step_links};
-use eash::element::Element;
+use eash::element::{BasicElement, ElementType};
+use eash::error::EASHError;
 use eash::misc_types::{Alignment, Color, Direction, HexColor, VisualState, Width};
-use eash::new_element;
-use eash::prompt::Prompt;
+use eash::prompt::{self, Prompt};
 
 use crossterm::{
     cursor::MoveToColumn,
@@ -11,6 +14,7 @@ use crossterm::{
     terminal::{Clear, ClearType, disable_raw_mode, enable_raw_mode},
 };
 
+use std::fmt::format;
 use std::{
     io::{Stdout, Write},
     panic::{set_hook, take_hook},
@@ -28,12 +32,129 @@ fn init_panic_hook() {
     }));
 }
 
-fn render<'a, W: Write + Send>(w: &mut W, elements: &MutexGuard<Chain>) {
+// returns string, content start, content end
+fn pad_string(original: String, size: u16, aligment: &Alignment) -> (String, usize, usize) {
+    let mut s = original;
+    if s.len() >= size as usize {
+        let len = s.len();
+        return (s, 0, len);
+    }
+
+    let difference = size as usize - s.len();
+    let start;
+    let end;
+    match aligment {
+        Alignment::Left => {
+            start = 0;
+            end = s.len();
+            s = format!("{}{}", s, " ".repeat(difference as usize));
+        }
+        Alignment::Center => {
+            let l = difference / 2;
+            let r = difference - l;
+            s = format!("{}{}{}", " ".repeat(l as usize), s, "".repeat(r as usize));
+            start = l;
+            end = s.len() - r;
+        }
+        Alignment::Right => {
+            s = format!("{}{}", " ".repeat(difference as usize), s);
+            start = difference;
+            end = s.len();
+        }
+    };
+
+    (s, start, end)
+}
+
+// we need it to be mutable to set the size
+fn render<'a, W: Write + Send>(
+    w: &mut W,
+    elements: &mut MutexGuard<Chain>,
+) -> Result<(), EASHError> {
     _ = queue!(w, MoveToColumn(0), Clear(ClearType::CurrentLine));
 
-    for item in elements.links.iter() {
-        
+    let mut cursor_position = 0;
+    for item in elements.links.iter_mut() {
+        let position = item.mass.position.round() as u16;
+        queue!(w, MoveToColumn(position))?;
+
+        // render each element based on it's enum 😨😨😨
+        match &item.element {
+            ElementType::BasicElement(e) => {
+                // add spacing
+                let mut print = format!(
+                    "{}{}{}",
+                    " ".repeat(e.visual_state.padding as usize),
+                    e.content,
+                    " ".repeat(e.visual_state.padding as usize)
+                );
+
+                // pad string if too small, cut it if its too big.
+                let (mut start, mut end);
+                match e.visual_state.width {
+                    Width::Minimum(m) => {
+                        (print, start, end) = pad_string(print, m as u16, &e.visual_state.align);
+                    }
+                    Width::Units(u) => {
+                        (print, start, end) = pad_string(print, u as u16, &e.visual_state.align);
+                    }
+                }
+
+                start += e.visual_state.padding as usize;
+                end -= e.visual_state.padding as usize;
+
+                item.mass.width = print.len() as u16;
+
+                // style & print element as required (character at a time if its a gradient)
+                if e.visual_state.bg_color.is_gradient() || e.visual_state.color.is_gradient() {
+                    let fg = e.visual_state.color.to_color_for_char(0.0);
+                    let bg = e.visual_state.bg_color.to_color_for_char(0.0);
+                    queue!(w, SetBackgroundColor(bg), SetForegroundColor(fg))?;
+
+                    for (i, character) in print.chars().enumerate() {
+                        let mut character = character.to_string().stylize();
+                        if i >= start && i <= end && e.visual_state.color.is_gradient() {
+                            let color = e
+                                .visual_state
+                                .color
+                                .to_color_for_char((i as usize - start / end) as f32);
+                            character = character.with(color)
+                        }
+
+                        if e.visual_state.bg_color.is_gradient() {
+                            character = character.on(e
+                                .visual_state
+                                .color
+                                .to_color_for_char((i as usize / end) as f32))
+                        }
+
+                        queue!(w, PrintStyledContent(character))?;
+                    }
+                } else {
+                    let styled = e
+                        .content
+                        .clone()
+                        .stylize()
+                        .with(e.visual_state.color.to_flat_color()?)
+                        .on(e.visual_state.bg_color.to_flat_color()?);
+                    queue!(w, PrintStyledContent(styled))?;
+                }
+            }
+            ElementType::Prompt(pm) => {
+                let lock = pm.lock().unwrap(); // idk how to convert a mutex error to an eash error
+                cursor_position = lock.cursor_position.clone();
+                queue!(w, ResetColor)?;
+                queue!(w, Print(lock.prompt.as_str()))?;
+
+                item.mass.width = lock.prompt.len() as u16;
+            }
+        }
+        w.flush()?;
     }
+    // if theres no cursor position then set it
+    queue!(w, MoveToColumn(cursor_position))?;
+
+    Ok(())
 }
 
 // TODO)) right now this just kind turns the result into an option... probably don't need this.
@@ -61,7 +182,7 @@ fn render_thread<W: Write + Send + 'static>(element_mutex: Arc<Mutex<Chain>>, w:
                 thread::sleep(Duration::from_millis(1000 / 60)); // TODO)) make configurable
                 let mut lock = element_mutex.lock().unwrap();
                 step_links(&mut lock, instant.elapsed().as_nanos() as f32 * 1e-9);
-                render(&mut w, &lock);
+                render(&mut w, &mut lock).expect("render esploded 💥💥💥");
                 instant = Instant::now();
             }
         })
@@ -79,35 +200,91 @@ fn main() {
         selection_start: None,
     }));
 
-    let elements = Arc::new(Mutex::new(vec![
-        ChainLink {
-            mass: ChainMass {
-                mass: 0.5,
-                position: -30.0,
-                velocity: 0.0,
+    // TODO)) make this more bearable with a builder and some macros or something
+    let elements: Arc<Mutex<Chain>> = Arc::new(Mutex::new(Chain {
+        spacing: 3,
+        links: vec![
+            ChainLink {
+                mass: ChainMass {
+                    mass: 0.5,
+                    position: -30.0,
+                    velocity: 0.0,
+                    width: 1,
+                },
+                element: ElementType::BasicElement(BasicElement {
+                    content: "wung".to_string(),
+                    visual_state: VisualState {
+                        align: Alignment::Left,
+                        width: Width::Minimum(30),
+                        padding: 2,
+                        bg_color: Color::Solid(HexColor {
+                            r: 30,
+                            g: 30,
+                            b: 30,
+                        }),
+                        color: Color::Solid(HexColor {
+                            r: 222,
+                            g: 222,
+                            b: 222,
+                        }),
+                    },
+                }),
             },
-            element: new_element!(Stdout, "wung", render_thread, render_thread),
-        },
-        ChainLink {
-            mass: ChainMass {
-                mass: 1.0,
-                position: -30.0,
-                velocity: 0.0,
+            ChainLink {
+                mass: ChainMass {
+                    mass: 1.0,
+                    position: 0.0,
+                    velocity: 0.0,
+                    width: 1,
+                },
+                element: ElementType::BasicElement(BasicElement {
+                    content: "wung".to_string(),
+                    visual_state: VisualState {
+                        align: Alignment::Left,
+                        width: Width::Minimum(30),
+                        padding: 2,
+                        bg_color: Color::Solid(HexColor {
+                            r: 30,
+                            g: 30,
+                            b: 30,
+                        }),
+                        color: Color::Solid(HexColor {
+                            r: 222,
+                            g: 222,
+                            b: 222,
+                        }),
+                    },
+                }),
             },
-            element: Box::new(Element {
-                prompt: prompt.clone(),
-            }),
-        },
-    ]));
+            ChainLink {
+                mass: ChainMass {
+                    mass: 1.0,
+                    position: 0.0,
+                    velocity: 0.0,
+                    width: 1,
+                },
+                element: ElementType::Prompt(prompt.clone()),
+            },
+        ],
+    }));
 
     enable_raw_mode().expect("Oh mah gawd.");
     render_thread(elements.clone(), std::io::stdout());
 
-    fn bump<W: Write + Send>(elements: &Arc<Mutex<Chain<W>>>, velocity: f32, direction: Direction) {
+    fn bump(elements: &Arc<Mutex<Chain>>, velocity: f32, direction: Direction) {
         let mut lock = elements.lock().unwrap();
-        lock[1].mass.velocity += match direction {
-            Direction::Left => velocity * -1.0,
-            Direction::Right => velocity,
+        // TODO)) make it so we don't have to iterate through the entire chain each time we bump
+        for v in lock.links.iter_mut() {
+            match v.element {
+                ElementType::Prompt(_) => {
+                    v.mass.velocity += match direction {
+                        Direction::Left => velocity * -1.0,
+                        Direction::Right => velocity,
+                    };
+                    break;
+                }
+                _ => {}
+            }
         }
     }
 
