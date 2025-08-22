@@ -1,27 +1,21 @@
-use crossterm::style::{
-    Print, PrintStyledContent, ResetColor, SetBackgroundColor, SetForegroundColor, Stylize,
-};
 use eash::{
     chain::{Chain, ChainLink, ChainMass, step_links},
+    draw::draw,
     element::{BasicElement, ElementType},
-    error::EASHError,
     misc_types::{Alignment, Color, Direction, HexColor, VisualState, Width},
     prompt::Prompt,
-    draw::draw,
 };
 
 use crossterm::{
-    cursor::MoveToColumn,
     event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
-    queue,
-    terminal::{Clear, ClearType, disable_raw_mode, enable_raw_mode},
+    terminal::{disable_raw_mode, enable_raw_mode},
 };
 
 use std::{
-    io::{Write},
+    io::Write,
     panic::{set_hook, take_hook},
     process::exit,
-    sync::{Arc, Mutex, MutexGuard},
+    sync::{Arc, Mutex},
     thread,
     time::{Duration, Instant},
 };
@@ -57,7 +51,12 @@ fn init_draw_thread<W: Write + Send + 'static>(element_mutex: Arc<Mutex<Chain>>,
             let mut instant = Instant::now();
             loop {
                 thread::sleep(Duration::from_millis(1000 / 60)); // TODO)) make configurable
-                let mut lock = element_mutex.lock().unwrap();
+                let lock_result = element_mutex.try_lock();
+                if lock_result.is_err() {
+                    continue;
+                };
+
+                let mut lock = lock_result.unwrap();
                 step_links(&mut lock, instant.elapsed().as_nanos() as f32 * 1e-9);
                 draw(&mut w, &mut lock).expect("render esploded 💥💥💥");
                 instant = Instant::now();
@@ -125,11 +124,7 @@ fn main() {
                             g: 222,
                             b: 222,
                         }),
-                        color: Color::Solid(HexColor {
-                            r: 2,
-                            g: 2,
-                            b: 2,
-                        }),
+                        color: Color::Solid(HexColor { r: 2, g: 2, b: 2 }),
                     },
                 }),
             },

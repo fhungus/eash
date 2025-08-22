@@ -1,32 +1,20 @@
 use crate::{
-    element::ElementType,
-    misc_types::{Alignment, Width},
-    chain::Chain,
+    chain::{Chain, ChainLink},
+    element::{BasicElement, ElementType},
     error::EASHError,
+    misc_types::{Alignment, Width},
 };
 
 use crossterm::{
-    queue,
     cursor::MoveToColumn,
+    queue,
     style::{
-        SetBackgroundColor,
-        SetForegroundColor,
-        PrintStyledContent,
-        ResetColor,
-        Print,
-        Stylize
+        Print, PrintStyledContent, ResetColor, SetBackgroundColor, SetForegroundColor, Stylize,
     },
-    terminal::{
-        Clear,
-        ClearType
-    }
+    terminal::{Clear, ClearType},
 };
 
-use std::{
-    sync::MutexGuard,
-    io::Write
-};
-
+use std::{io::Write, sync::MutexGuard};
 
 // returns string with padding, content start & content end
 pub fn pad_string(original: String, size: u16, aligment: &Alignment) -> (String, usize, usize) {
@@ -62,7 +50,28 @@ pub fn pad_string(original: String, size: u16, aligment: &Alignment) -> (String,
     (s, start, end)
 }
 
-// we need it to be mutable to set the size
+pub fn draw_flat_basic_element<W: Write>(w: &mut W, item: &ChainLink, e: &BasicElement, content: String) -> Result<(), EASHError> {
+    let mut print = &content[0..];
+    // cut the string off if its behind the first terminal character
+    if item.mass.position.round() < 0.0 {
+        let difference = item.mass.position.round().abs() as u16;
+        if difference >= print.len() as u16 {
+            return Ok(());
+        }
+
+        print = &content[difference as usize..];
+    }
+
+    let styled = print
+        .stylize()
+        .with(e.visual_state.color.to_flat_color()?)
+        .on(e.visual_state.bg_color.to_flat_color()?);
+    queue!(w, PrintStyledContent(styled))?;
+    return Ok(());
+}
+
+// we need it to be mutable to set the width property on mass
+// TODO)) split this function up
 pub fn draw<'a, W: Write + Send>(
     w: &mut W,
     elements: &mut MutexGuard<Chain>,
@@ -127,17 +136,12 @@ pub fn draw<'a, W: Write + Send>(
                         queue!(w, PrintStyledContent(character))?;
                     }
                 } else {
-                    let styled = print
-                        .clone()
-                        .stylize()
-                        .with(e.visual_state.color.to_flat_color()?)
-                        .on(e.visual_state.bg_color.to_flat_color()?);
-                    queue!(w, PrintStyledContent(styled))?;
+                    draw_flat_basic_element(w, item, e, print);
                 }
             }
             ElementType::Prompt(pm) => {
                 let lock = pm.lock().unwrap(); // idk how to convert a mutex error to an eash error
-                cursor_position = item.mass.position.round() as u16  + lock.cursor_position.clone();
+                cursor_position = item.mass.position.round() as u16 + lock.cursor_position.clone();
                 queue!(w, ResetColor)?;
                 queue!(w, Print(lock.prompt.as_str()))?;
 
