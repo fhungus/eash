@@ -1,7 +1,9 @@
 use eash::{
     chain::{Chain, ChainLink, ChainMass, step_links},
+    config::{file_to_config, get_elements_from_config, find_config},
     draw::draw,
     element::{BasicElement, ElementType},
+    error::EASHError,
     misc_types::{Alignment, Color, Direction, HexColor, VisualState, Width},
     prompt::Prompt,
 };
@@ -12,12 +14,7 @@ use crossterm::{
 };
 
 use std::{
-    io::Write,
-    panic::{set_hook, take_hook},
-    process::exit,
-    sync::{Arc, Mutex},
-    thread,
-    time::{Duration, Instant},
+    io::Write, panic::{set_hook, take_hook}, process::exit, sync::{Arc, Mutex}, thread, time::{Duration, Instant}
 };
 
 fn init_panic_hook() {
@@ -65,7 +62,19 @@ fn init_draw_thread<W: Write + Send + 'static>(element_mutex: Arc<Mutex<Chain>>,
         .expect("erm.... what the thread?");
 }
 
-fn main() {
+fn main() -> Result<(), EASHError> {
+    let config_path = find_config()?;
+    if config_path == None {
+        // WE'RE JUST GONNA KILL EM!!!!
+        println!("Failed to find a config file!!!\n
+                  Put an eash.toml file in either .config/, .config/eash, or your current folder.
+                  (eventually im planning on having this generate a config file after getting permission)");
+        return Ok(());
+    }
+
+    // TODO)) proper handling for this
+    let config = Arc::new(file_to_config(config_path.unwrap())?);
+
     // just disables raw mode when we panic
     init_panic_hook();
 
@@ -76,75 +85,36 @@ fn main() {
         selection_start: None,
     }));
 
-    // TODO)) make this more bearable with a builder and some macros or something
-    let elements: Arc<Mutex<Chain>> = Arc::new(Mutex::new(Chain {
-        spacing: 3,
-        links: vec![
-            ChainLink {
-                mass: ChainMass {
-                    mass: 0.5,
-                    position: -10.0,
-                    velocity: 0.0,
-                    width: 1,
-                },
-                element: ElementType::BasicElement(BasicElement {
-                    content: "home/bitchass".to_string(),
-                    visual_state: VisualState {
-                        align: Alignment::Left,
-                        width: Width::Minimum(2),
-                        padding: 2,
-                        bg_color: Color::Solid(HexColor {
-                            r: 100,
-                            g: 30,
-                            b: 30,
-                        }),
-                        color: Color::Solid(HexColor {
-                            r: 222,
-                            g: 222,
-                            b: 222,
-                        }),
-                    },
-                }),
-            },
-            ChainLink {
-                mass: ChainMass {
-                    mass: 1.0,
-                    position: -5.0,
-                    velocity: 0.0,
-                    width: 1,
-                },
-                element: ElementType::BasicElement(BasicElement {
-                    content: "wung".to_string(),
-                    visual_state: VisualState {
-                        align: Alignment::Left,
-                        width: Width::Minimum(30),
-                        padding: 2,
-                        bg_color: Color::Solid(HexColor {
-                            r: 255,
-                            g: 222,
-                            b: 222,
-                        }),
-                        color: Color::Solid(HexColor { r: 2, g: 2, b: 2 }),
-                    },
-                }),
-            },
-            ChainLink {
-                mass: ChainMass {
-                    mass: 1.0,
-                    position: 0.0,
-                    velocity: 0.0,
-                    width: 1,
-                },
-                element: ElementType::Prompt(prompt.clone()),
-            },
-        ],
+    // TODO)) move chain propagation into its own function
+    let mut links: Vec<ChainLink> = get_elements_from_config(config.as_ref())?.into_iter().enumerate().map(|(i, e)| ChainLink {
+        mass: ChainMass { // TODO)) chainmass should set itself intelligently 🧠🧠🧠 instead of being defined here...
+            position: i as f32 - 10.0,
+            mass: 1.0,
+            velocity: 0.0,
+            width: 0 // set by render function...
+        },
+        element: e
+    }).collect();
+    links.push(ChainLink {
+        mass: ChainMass {
+            position: links.len() as f32 - 10.0,
+            mass: 1.0,
+            velocity: 0.0,
+            width: 0
+        },
+        element: ElementType::Prompt(prompt.clone())
+    });
+
+    let chain = Arc::new(Mutex::new(Chain {
+        spring: config.spring.clone().into(),
+        links: links
     }));
 
     enable_raw_mode().expect("Oh mah gawd.");
-    init_draw_thread(elements.clone(), std::io::stdout());
+    init_draw_thread(chain.clone(), std::io::stdout());
 
-    fn bump(elements: &Arc<Mutex<Chain>>, velocity: f32, direction: Direction) {
-        let mut lock = elements.lock().unwrap();
+    fn bump(chain: &Arc<Mutex<Chain>>, velocity: f32, direction: Direction) {
+        let mut lock = chain.lock().unwrap();
         // TODO)) make it so we don't have to iterate through the entire chain each time we bump
         for v in lock.links.iter_mut() {
             match v.element {
@@ -181,7 +151,7 @@ fn main() {
                     && keypress_event.modifiers.contains(KeyModifiers::CONTROL)
                 {
                     if lock.ctrl_backspace() {
-                        bump(&elements, 50.0, Direction::Left);
+                        bump(&chain, 50.0, Direction::Left);
                     }
                     continue;
                 }
@@ -191,9 +161,9 @@ fn main() {
             KeyCode::Backspace => {
                 // run the backspace function, bump it harder if it returns true
                 if lock.backspace() {
-                    bump(&elements, 30.0, Direction::Left);
+                    bump(&chain, 30.0, Direction::Left);
                 } else {
-                    bump(&elements, 10.0, Direction::Left);
+                    bump(&chain, 10.0, Direction::Left);
                 }
             }
             KeyCode::Left => {
@@ -201,9 +171,9 @@ fn main() {
                 let ctrl = keypress_event.modifiers.contains(KeyModifiers::CONTROL);
                 // run the arrow function, bump it harder if it returns true
                 if lock.horiziontal_arrow(Direction::Left, shift, ctrl) {
-                    bump(&elements, 30.0, Direction::Left);
+                    bump(&chain, 30.0, Direction::Left);
                 } else {
-                    bump(&elements, 10.0, Direction::Left);
+                    bump(&chain, 10.0, Direction::Left);
                 }
             }
             KeyCode::Right => {
@@ -211,9 +181,9 @@ fn main() {
                 let ctrl = keypress_event.modifiers.contains(KeyModifiers::CONTROL);
                 // run the arrow function, bump it harder if it returns true
                 if lock.horiziontal_arrow(Direction::Right, shift, ctrl) {
-                    bump(&elements, 30.0, Direction::Right);
+                    bump(&chain, 30.0, Direction::Right);
                 } else {
-                    bump(&elements, 10.0, Direction::Right);
+                    bump(&chain, 10.0, Direction::Right);
                 }
             }
             _ => {}

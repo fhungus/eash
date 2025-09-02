@@ -50,11 +50,17 @@ pub fn pad_string(original: String, size: u16, aligment: &Alignment) -> (String,
     (s, start, end)
 }
 
-pub fn draw_flat_basic_element<W: Write>(w: &mut W, item: &ChainLink, e: &BasicElement, content: String) -> Result<(), EASHError> {
+pub fn draw_flat_basic_element<W: Write>(
+    w: &mut W,
+    item: &ChainLink,
+    e: &BasicElement,
+    content: String,
+) -> Result<(), EASHError> {
     let mut print = &content[0..];
     // cut the string off if its behind the first terminal character
     if item.mass.position.round() < 0.0 {
         let difference = item.mass.position.round().abs() as u16;
+        // don't print the string
         if difference >= print.len() as u16 {
             return Ok(());
         }
@@ -136,7 +142,7 @@ pub fn draw<'a, W: Write + Send>(
                         queue!(w, PrintStyledContent(character))?;
                     }
                 } else {
-                    draw_flat_basic_element(w, item, e, print);
+                    draw_flat_basic_element(w, item, e, print)?;
                 }
             }
             ElementType::Prompt(pm) => {

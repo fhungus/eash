@@ -1,9 +1,19 @@
 use crate::misc_types::Direction;
 
 pub struct Prompt {
-    pub cursor_position: u16,
     pub prompt: String,
+    pub cursor_position: u16,
     pub selection_start: Option<u16>, // if None, then there is no selection
+}
+
+impl Default for Prompt {
+    fn default() -> Self {
+        Self {
+            prompt: String::new(),
+            cursor_position: 0,
+            selection_start: None,
+        }
+    }
 }
 
 impl Prompt {
@@ -41,8 +51,8 @@ impl Prompt {
             }
 
             // check if THIS character is "skippable", if it is, set cursor_pos and return here
-            // TODO: make this part support utf16, mostly just in case i need it in the future
-            // TODO: (also) do this just generally better
+            // TODO)) make this part support utf16, mostly just in case i need it in the future
+            // TODO)) (also) do this just generally better
             let bytes = self.prompt.as_bytes()[(i - 1) as usize];
             if ' ' as u8 == bytes || '/' as u8 == bytes || '=' as u8 == bytes {
                 return i as u16;

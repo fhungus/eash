@@ -3,14 +3,11 @@ pub enum EASHError {
     FlushFaliure,
     MalformedElement,
     ColorNotFlat,
-    MLuaError(mlua::Error),
     IOError(std::io::Error),
-}
-
-impl From<mlua::Error> for EASHError {
-    fn from(value: mlua::Error) -> Self {
-        return EASHError::MLuaError(value);
-    }
+    ConfigSyntaxError(String),
+    ConfigMalformedBracket(String),
+    ConfigInvalidType { expected: &'static str, got: String },
+    ConfigPromptUsed,
 }
 
 impl From<std::io::Error> for EASHError {

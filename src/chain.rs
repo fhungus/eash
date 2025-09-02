@@ -1,9 +1,9 @@
-use crate::element::ElementType;
-use std::{io::Write, sync::MutexGuard};
+use crate::{element::ElementType, misc_types::Spring};
+use std::sync::MutexGuard;
 
 // maybe i should stop empubbinating everything
 pub struct Chain {
-    pub spacing: u16,
+    pub spring: Spring,
     pub links: Vec<ChainLink>,
 }
 
@@ -19,7 +19,7 @@ pub fn calculate_force(chain: &Chain, link_index: usize) -> f32 {
     // we could DRY this out, right?
     if link_index != 0 {
         if let Some(left_neighbour) = chain.links.get(link_index - 1) {
-            let natural_distance = calculate_spring_distance(chain.spacing, left_neighbour);
+            let natural_distance = calculate_spring_distance(chain.spring.spacing, left_neighbour);
             let displacement = link.mass.position - left_neighbour.mass.position;
             force += -SPRING_CONSTANT * (displacement - (natural_distance as f32));
         }
@@ -33,7 +33,7 @@ pub fn calculate_force(chain: &Chain, link_index: usize) -> f32 {
 
     // right spring
     if let Some(right_neighbour) = chain.links.get(link_index + 1) {
-        let natural_distance = calculate_spring_distance(chain.spacing, link); // ERM!!!
+        let natural_distance = calculate_spring_distance(chain.spring.spacing, link); // ERM!!!
         let displacement = right_neighbour.mass.position - link.mass.position;
         force += SPRING_CONSTANT * (displacement - (natural_distance as f32));
     }

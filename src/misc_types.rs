@@ -1,11 +1,13 @@
 use crate::error::EASHError;
 use crossterm::style::Color as ctColor;
+use serde::Deserialize;
 
 pub enum Direction {
     Left,
     Right,
 }
 
+#[derive(Deserialize, Clone)]
 pub struct HexColor {
     pub r: u8,
     pub g: u8,
@@ -52,6 +54,13 @@ impl Color {
             Self::Transparent => Ok(ctColor::Reset),
         }
     }
+}
+
+#[derive(Deserialize, Clone)]
+pub struct Spring {
+    pub spacing: u16,
+    pub constant: f32,
+    pub dampening: f32,
 }
 
 pub enum Alignment {
