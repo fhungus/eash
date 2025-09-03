@@ -1,0 +1,14 @@
+[[chain_elements]]
+type = "BasicElement"
+content = "good enough ig"
+[chain_elements.visual_state]
+align = "Right"
+width = "Minimum(25)"
+padding = 2
+bg_color = {type = "Solid", r = 25, g = 25, b = 25}
+color = {type = "Solid", r = 255, g = 255, b = 255}
+
+[spring]
+spacing = 1
+constant = 1.1
+dampening = 0.1
