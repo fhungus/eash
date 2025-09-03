@@ -95,7 +95,7 @@ fn main() -> Result<(), EASHError> {
         },
         element: e
     }).collect();
-    links.push(ChainLink {
+    links.push(ChainLink { // prompt gets special treatment because 💤
         mass: ChainMass {
             position: links.len() as f32 - 10.0,
             mass: 1.0,

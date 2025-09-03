@@ -7,10 +7,6 @@ pub struct Chain {
     pub links: Vec<ChainLink>,
 }
 
-// [TODO] configuration
-const SPRING_CONSTANT: f32 = 1.0;
-const SPRING_DAMPING: f32 = 0.05;
-
 pub fn calculate_force(chain: &Chain, link_index: usize) -> f32 {
     let link = &chain.links[link_index];
     let mut force: f32 = 0.0;
@@ -21,24 +17,24 @@ pub fn calculate_force(chain: &Chain, link_index: usize) -> f32 {
         if let Some(left_neighbour) = chain.links.get(link_index - 1) {
             let natural_distance = calculate_spring_distance(chain.spring.spacing, left_neighbour);
             let displacement = link.mass.position - left_neighbour.mass.position;
-            force += -SPRING_CONSTANT * (displacement - (natural_distance as f32));
+            force += -chain.spring.constant * (displacement - (natural_distance as f32));
         }
     } else {
         // nudge the starting element to zero, so we can anchor to something
         // will be removed when i figure out how to do this more cleanly
         let natural_distance = 2;
         let displacement = link.mass.position; // goal position is ZERO!
-        force += -SPRING_CONSTANT * (displacement - (natural_distance as f32))
+        force += -chain.spring.constant * (displacement - (natural_distance as f32))
     }
 
     // right spring
     if let Some(right_neighbour) = chain.links.get(link_index + 1) {
         let natural_distance = calculate_spring_distance(chain.spring.spacing, link); // ERM!!!
         let displacement = right_neighbour.mass.position - link.mass.position;
-        force += SPRING_CONSTANT * (displacement - (natural_distance as f32));
+        force += chain.spring.constant * (displacement - (natural_distance as f32));
     }
 
-    force -= SPRING_DAMPING * link.mass.velocity;
+    force -= chain.spring.dampening * link.mass.velocity;
 
     return force;
 }

@@ -10,5 +10,5 @@ color = {type = "Solid", r = 255, g = 255, b = 255}
 
 [spring]
 spacing = 1
-constant = 1.1
-dampening = 0.1
+constant = 6
+dampening = 0.3
