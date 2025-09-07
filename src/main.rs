@@ -1,6 +1,6 @@
 use eash::{
     chain::{Chain, ChainLink, ChainMass, step_links},
-    config::{file_to_config, get_elements_from_config, find_config},
+    config::{file_to_config, find_config, get_elements_from_config},
     draw::draw,
     element::{BasicElement, ElementType},
     error::EASHError,
@@ -14,7 +14,12 @@ use crossterm::{
 };
 
 use std::{
-    io::Write, panic::{set_hook, take_hook}, process::exit, sync::{Arc, Mutex}, thread, time::{Duration, Instant}
+    io::Write,
+    panic::{set_hook, take_hook},
+    process::exit,
+    sync::{Arc, Mutex},
+    thread,
+    time::{Duration, Instant},
 };
 
 fn init_panic_hook() {
@@ -86,28 +91,34 @@ fn main() -> Result<(), EASHError> {
     }));
 
     // TODO)) move chain propagation into its own function
-    let mut links: Vec<ChainLink> = get_elements_from_config(config.as_ref())?.into_iter().enumerate().map(|(i, e)| ChainLink {
-        mass: ChainMass { // TODO)) chainmass should set itself intelligently 🧠🧠🧠 instead of being defined here...
-            position: i as f32 - 10.0,
-            mass: 1.0,
-            velocity: 0.0,
-            width: 0 // set by render function...
-        },
-        element: e
-    }).collect();
-    links.push(ChainLink { // prompt gets special treatment because 💤
+    let mut links: Vec<ChainLink> = get_elements_from_config(config.as_ref())?
+        .into_iter()
+        .enumerate()
+        .map(|(i, e)| ChainLink {
+            mass: ChainMass {
+                // TODO)) chainmass should set itself intelligently 🧠🧠🧠 instead of being defined here...
+                position: i as f32 - 10.0,
+                mass: 1.0,
+                velocity: 0.0,
+                width: 0, // set by render function...
+            },
+            element: e,
+        })
+        .collect();
+    links.push(ChainLink {
+        // prompt gets special treatment because 💤
         mass: ChainMass {
             position: links.len() as f32 - 10.0,
             mass: 1.0,
             velocity: 0.0,
-            width: 0
+            width: 0,
         },
-        element: ElementType::Prompt(prompt.clone())
+        element: ElementType::Prompt(prompt.clone()),
     });
 
     let chain = Arc::new(Mutex::new(Chain {
         spring: config.spring.clone().into(),
-        links: links
+        links: links,
     }));
 
     enable_raw_mode().expect("Oh mah gawd.");

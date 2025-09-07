@@ -26,7 +26,7 @@ impl From<SpringConfig> for Spring {
         Spring {
             spacing: sc.spacing,
             constant: sc.constant,
-            dampening: sc.dampening
+            dampening: sc.dampening,
         }
     }
 }
@@ -187,26 +187,26 @@ pub fn find_config() -> Result<Option<String>, EASHError> {
     Ok(None)
 }
 
-    pub fn get_elements_from_config(config: &Config) -> Result<Vec<ElementType>, EASHError> {
-        let mut elements: Vec<ElementType> = Vec::new();
-        for i in config.chain_elements.iter() {
-            match i {
-                ConfigElement::BasicElement {
-                    content,
-                    visual_state,
-                } => {
-                    // MOST MEMORY DUPLICATING CODE AWARD: me 🎖️
-                    let vs: VisualState = visual_state.clone().try_into()?;
-                    elements.push(ElementType::BasicElement(BasicElement {
-                        content: content.clone(),
-                        visual_state: vs,
-                    }));
-                }
-                ConfigElement::Prompt => {
-                    return Err(EASHError::ConfigPromptUsed);
-                }
+pub fn get_elements_from_config(config: &Config) -> Result<Vec<ElementType>, EASHError> {
+    let mut elements: Vec<ElementType> = Vec::new();
+    for i in config.chain_elements.iter() {
+        match i {
+            ConfigElement::BasicElement {
+                content,
+                visual_state,
+            } => {
+                // MOST MEMORY DUPLICATING CODE AWARD: me 🎖️
+                let vs: VisualState = visual_state.clone().try_into()?;
+                elements.push(ElementType::BasicElement(BasicElement {
+                    content: content.clone(),
+                    visual_state: vs,
+                }));
+            }
+            ConfigElement::Prompt => {
+                return Err(EASHError::ConfigPromptUsed);
             }
         }
-
-        return Ok(elements);
     }
+
+    return Ok(elements);
+}

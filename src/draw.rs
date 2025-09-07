@@ -2,6 +2,7 @@ use crate::{
     chain::{Chain, ChainLink},
     element::{BasicElement, ElementType},
     error::EASHError,
+    evaluate::tokenize,
     misc_types::{Alignment, Width},
 };
 
@@ -150,6 +151,15 @@ pub fn draw<'a, W: Write + Send>(
                 cursor_position = item.mass.position.round() as u16 + lock.cursor_position.clone();
                 queue!(w, ResetColor)?;
                 queue!(w, Print(lock.prompt.as_str()))?;
+
+                let tokens = tokenize(&lock.prompt);
+                if tokens.is_empty() {
+                    continue;
+                }
+
+                // try to figure out how we got from string to token and apply changes as we go
+                let mut current_token = tokens.get(0).unwrap();
+                for c in lock.prompt.chars() {}
 
                 item.mass.width = lock.prompt.len() as u16;
             }

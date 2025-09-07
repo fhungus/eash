@@ -3,5 +3,6 @@ pub mod config;
 pub mod draw;
 pub mod element;
 pub mod error;
+pub mod evaluate;
 pub mod misc_types;
 pub mod prompt;
