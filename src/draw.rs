@@ -2,15 +2,15 @@ use crate::{
     chain::{Chain, ChainLink},
     element::{BasicElement, ElementType},
     error::EASHError,
-    evaluate::tokenize,
     misc_types::{Alignment, Width},
+    evaluate::{tokenize, TokenType},
 };
 
 use crossterm::{
     cursor::MoveToColumn,
     queue,
     style::{
-        Print, PrintStyledContent, ResetColor, SetBackgroundColor, SetForegroundColor, Stylize,
+        Print, PrintStyledContent, ResetColor, SetBackgroundColor, SetForegroundColor, Stylize, Color as ctColor
     },
     terminal::{Clear, ClearType},
 };
@@ -150,16 +150,42 @@ pub fn draw<'a, W: Write + Send>(
                 let lock = pm.lock().unwrap(); // idk how to convert a mutex error to an eash error
                 cursor_position = item.mass.position.round() as u16 + lock.cursor_position.clone();
                 queue!(w, ResetColor)?;
-                queue!(w, Print(lock.prompt.as_str()))?;
 
                 let tokens = tokenize(&lock.prompt);
                 if tokens.is_empty() {
                     continue;
                 }
 
-                // try to figure out how we got from string to token and apply changes as we go
-                let mut current_token = tokens.get(0).unwrap();
-                for c in lock.prompt.chars() {}
+                // Oh my Performance Bruh
+                let mut colors = Vec::new();
+                for token in tokens {
+                    // temporary logic....
+                    let color = match token.contents {
+                        TokenType::Value(_) => ctColor::Black,
+                        TokenType::Flag(_) => ctColor::Red,
+                        TokenType::Directory(_) => ctColor::Yellow,
+                        TokenType::String(_) => ctColor::Green,
+                        TokenType::AndThen => ctColor::Magenta,
+                        TokenType::Pipe => ctColor::Cyan,
+                        TokenType::Nonsense(_) => ctColor::DarkRed,
+                    };
+                    colors.push((token.start, color));
+                }
+
+                let mut color_index = 0;
+                let (_, first_color) = colors.get(0).unwrap();
+                queue!(w, SetForegroundColor(*first_color))?;
+                for (position, character) in lock.prompt.chars().enumerate() {
+                    let color = colors.get(color_index + 1);
+                    if let Some((ni, nc)) = color {
+                        if *ni == position {
+                            queue!(w, SetForegroundColor(*nc))?;
+                            color_index += 1;
+                        }
+                    }
+
+                    queue!(w, Print(character))?;
+                }
 
                 item.mass.width = lock.prompt.len() as u16;
             }

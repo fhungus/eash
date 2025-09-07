@@ -5,19 +5,20 @@ use crate::error::EASHError;
 
 #[derive(PartialEq, Debug)]
 pub enum TokenType {
-    AndThen,
-    Pipe,
-    Flag(String),
+    Value(String),
     String(String),
     Directory(String),
+    Flag(String),
+    AndThen,
+    Pipe,
     Nonsense(String),
 }
 
 #[derive(PartialEq, Debug)]
 pub struct Token {
-    start: usize,
-    end: usize,
-    contents: TokenType,
+    pub start: usize,
+    pub end: usize,
+    pub contents: TokenType,
 }
 
 enum ConsumptionMode {
@@ -43,7 +44,11 @@ fn str_to_token(s: &str, mode: &ConsumptionMode, start: usize, end: usize) -> To
             if looks_like_directory(s) {
                 TokenType::Directory(content)
             } else {
-                TokenType::String(content)
+                if let ConsumptionMode::String(_) = mode {
+                    TokenType::String(content)
+                } else {
+                    TokenType::Value(content)
+                }
             }
         }
         ConsumptionMode::Flag => TokenType::Flag(s.to_string()),
@@ -69,7 +74,7 @@ pub fn tokenize(s: &str) -> Vec<Token> {
     let mut chars = s.chars().enumerate().peekable().into_iter();
     loop {
         let c;
-        let mut pos: usize; // look... we just gotta do this.. ok?
+        let pos;
         if let Some((np, nc)) = chars.next() {
             c = nc;
             pos = np;
@@ -151,10 +156,10 @@ pub fn tokenize(s: &str) -> Vec<Token> {
                 mode = ConsumptionMode::Default;
                 tokens.push(Token {
                     start: current_token_start,
-                    end: pos,
+                    end: pos+1,
                     contents: TokenType::AndThen,
                 });
-                current_token_start = pos + 1;
+                current_token_start = pos + 2;
             }
             _ => {
                 if string_check(&mode) {
