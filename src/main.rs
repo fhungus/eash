@@ -2,9 +2,9 @@ use eash::{
     chain::{Chain, ChainLink, ChainMass, step_links},
     config::{file_to_config, find_config, get_elements_from_config},
     draw::draw,
-    element::{BasicElement, ElementType},
+    element::{ElementType},
     error::EASHError,
-    misc_types::{Alignment, Color, Direction, HexColor, VisualState, Width},
+    misc_types::{Direction},
     prompt::Prompt,
 };
 

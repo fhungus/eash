@@ -147,7 +147,14 @@ pub fn draw<'a, W: Write + Send>(
                 }
             }
             ElementType::Prompt(pm) => {
-                let lock = pm.lock().unwrap(); // idk how to convert a mutex error to an eash error
+                let lock_result = pm.try_lock(); // idk how to convert a mutex error to an eash error
+                let lock;
+                // TODO)) make this not quit drawing prompt when the mutex is locked?
+                if let Ok(l) = lock_result {
+                    lock = l;
+                } else {
+                    continue;
+                }
                 cursor_position = item.mass.position.round() as u16 + lock.cursor_position.clone();
                 queue!(w, ResetColor)?;
 
