@@ -1,9 +1,9 @@
 // tiny ass trinkets for parsing a syntax that is unfortunately oderous of sh
-use std::{process::Command, thread::current};
+use std::{collections::HashMap, process::{Command, CommandArgs}, thread::current};
 
-use crate::error::EASHError;
+use crate::error::{EASHError, EASHUncomfortable};
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum TokenType {
     Value(String),
     String(String),
@@ -14,12 +14,25 @@ pub enum TokenType {
     Nonsense(String),
 }
 
-#[derive(PartialEq, Debug)]
+impl TokenType {
+    fn not_a_symbol {
+        match &t.contents {
+            TokenType::Directory(s) => Some(s),
+            TokenType::String(s) => Some(s),
+            TokenType::Value(s) => Some(s),
+            _ => None,
+        }
+    }
+}
+
+#[derive(PartialEq, Debug, Clone)]
 pub struct Token {
     pub start: usize,
     pub end: usize,
     pub contents: TokenType,
 }
+
+pub type TokenString = Vec<Token>;
 
 enum ConsumptionMode {
     Default,
@@ -156,7 +169,7 @@ pub fn tokenize(s: &str) -> Vec<Token> {
                 mode = ConsumptionMode::Default;
                 tokens.push(Token {
                     start: current_token_start,
-                    end: pos+1,
+                    end: pos + 1,
                     contents: TokenType::AndThen,
                 });
                 current_token_start = pos + 2;
@@ -179,6 +192,76 @@ pub fn tokenize(s: &str) -> Vec<Token> {
     }
 
     return tokens;
+}
+
+struct TreeCommand {
+    program_path: String,
+    flags: Vec<(String, String)>,
+    values: Vec<String>,
+    pipe: bool, // will pipe this command to the next if it should (|) and not if it shouldnt (&& / nothing i guess)
+    next: Option<Box<TreeCommand>>
+}
+
+fn 
+
+fn new_treecommand_with_token(t: &Token) -> Result<TreeCommand, EASHUncomfortable> {
+
+
+    if let Some(s) = treeable {
+        return Ok(
+            TreeCommand {
+                // im cloning up a STORM!!!
+                program_path: s.clone(),
+                flags: Vec::new(), 
+                values: Vec::new(), 
+                pipe: false, 
+                next: None 
+            })
+    }  else {
+        return Err(EASHUncomfortable::CommandStartedWithoutProgram(t.clone()));
+    }
+}
+
+fn to_ast(tokens: &Vec<Token>) -> Result<TreeCommand, EASHUncomfortable> {
+    let commands: Vec<TreeCommand> = Vec::new();
+    let mut processing: Option<TreeCommand> = None;
+    let tokens_iter = tokens.iter().peekable();
+    loop {
+        let t = match tokens_iter.next() {
+            Some(t) => t,
+            None => {
+                break
+            },
+        };
+        match processing {
+            None => {
+                processing = Some(new_treecommand_with_token(t)?);
+            },
+            Some(p) => {
+                match &t.contents {
+                    TokenType::Flag(s) => {
+                        let after = tokens_iter.peek();
+                        match after {
+                            None => {
+
+                            },
+                            Some(t2) => {
+                                
+                            }
+                        }
+                    },
+                    TokenType::Directory(s) => {
+                        p.values.push(s.clone());
+                    },
+                    TokenType::String(s) => {
+                        p.values.push(s.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    return tokens
 }
 
 #[cfg(test)]

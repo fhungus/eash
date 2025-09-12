@@ -1,3 +1,5 @@
+use std::time::{Duration, Instant};
+
 use crate::error::EASHError;
 use crossterm::style::Color as ctColor;
 use serde::Deserialize;
@@ -56,6 +58,47 @@ impl Color {
     }
 }
 
+pub enum Glyph {
+    Single(char),
+    Animated {
+        glyphs: Vec<char>, 
+        delay: f32 // in seconds
+    }
+}
+
+impl Glyph {
+    pub fn get_current_glyph_state(&self, start: Instant) -> &char {
+        match self {
+            Glyph::Single(c) => {return c},
+            Glyph::Animated { glyphs, delay } => {
+                if glyphs.is_empty() { return &'!' ;}
+                let chrono_length = glyphs.len() as f32 * delay;
+                // might be some inconsistency here due to floating points
+                let since_start = start.elapsed().as_millis() as f32 * 0.001;
+                // TODO)) modulos are probably pretty computationally expensive so uhh.. maybe dont?
+                let index = ((since_start % chrono_length) / delay).floor() as usize;
+
+                return glyphs.get(index).or(Some(&'😭')).unwrap();
+            }
+        }
+    }
+}
+
+pub struct EASHPallete {
+    // prompt stuff...
+    value_fg: Color,
+    string_fg: Color,
+    flag_fg: Color,
+    andthen_fg: Color,
+    pipe_fg: Color,
+
+    // not sure if we'll need to use ALL of these, mostly just here as an example i guess.
+    warning_glyph: Glyph,
+    error_glyph: Glyph,
+    processing_glyph: Glyph,
+    waiting_glyph: Glyph,
+}
+
 #[derive(Deserialize, Clone)]
 pub struct Spring {
     pub spacing: u16,
@@ -73,9 +116,6 @@ pub enum Width {
     Units(u32),
     Minimum(u32),
 }
-
-// temporary until i figure out what a glyph should be
-pub type Glyph = char;
 
 pub enum TriggerType {
     EveryFrame,

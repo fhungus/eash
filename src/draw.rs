@@ -2,15 +2,16 @@ use crate::{
     chain::{Chain, ChainLink},
     element::{BasicElement, ElementType},
     error::EASHError,
+    evaluate::{TokenType, tokenize},
     misc_types::{Alignment, Width},
-    evaluate::{tokenize, TokenType},
 };
 
 use crossterm::{
     cursor::MoveToColumn,
     queue,
     style::{
-        Print, PrintStyledContent, ResetColor, SetBackgroundColor, SetForegroundColor, Stylize, Color as ctColor
+        Color as ctColor, Print, PrintStyledContent, ResetColor, SetBackgroundColor,
+        SetForegroundColor, Stylize,
     },
     terminal::{Clear, ClearType},
 };
