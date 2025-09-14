@@ -1,3 +1,5 @@
+use crossterm::style::Stylize;
+
 use crate::misc_types::Direction;
 
 pub struct Prompt {
@@ -36,27 +38,36 @@ impl Prompt {
     }
 
     pub fn find_skippable_in_direction(&self, direction: Direction) -> u16 {
-        let increment = match direction {
-            Direction::Left => -1,
-            Direction::Right => 1,
+        let (l, r) = self.prompt.split_at_checked(self.cursor_position as usize).unwrap();
+        match direction {
+            Direction::Left => {
+                let mut iter = l.chars().rev().enumerate();
+                _ = iter.next();
+                for (i, c) in iter {
+                    // check if THIS character is "skippable", if it is, set cursor_pos and return here
+                    match c {
+                        '/' | ' ' | '.' | ',' | '\'' | '"' => { return self.cursor_position - (i as u16) },
+                        _ => {}
+                    }
+                }
+            }
+            Direction::Right => {
+                let mut iter = r.chars().enumerate();
+                _ = iter.next();
+                for (i, c) in iter {
+                    // same thing.. duplication... ):
+                    match c {
+                        '/' | ' ' | '.' | ',' | '\'' | '"' => { return i as u16 + self.cursor_position },
+                        _ => {}
+                    }
+                }
+            }
         };
 
-        let mut i = self.cursor_position as i16;
-        loop {
-            i = i + increment;
-            if i <= 0 || self.prompt.len() <= 0 {
-                return 0;
-            } else if i >= self.prompt.len() as i16 {
-                return self.prompt.len() as u16;
-            }
-
-            // check if THIS character is "skippable", if it is, set cursor_pos and return here
-            // TODO)) make this part support utf16, mostly just in case i need it in the future
-            // TODO)) (also) do this just generally better
-            let bytes = self.prompt.as_bytes()[(i - 1) as usize];
-            if ' ' as u8 == bytes || '/' as u8 == bytes || '=' as u8 == bytes {
-                return i as u16;
-            }
+        // failed to find anything so return the start/end of the prompt
+        return match direction {
+            Direction::Left => 0,
+            Direction::Right => self.prompt.len() as u16
         }
     }
 
