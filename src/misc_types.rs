@@ -1,3 +1,4 @@
+use core::time;
 use std::time::Instant;
 
 use crate::error::EASHError;
@@ -95,9 +96,8 @@ impl Glyph {
                     speed_ms = (speed * 1000.0).floor().to_int_unchecked();
                 };
                 
-                println!("{}", time_since_then.rem_euclid(speed_ms * characters.len() as u128));
-                let index = (time_since_then % (speed_ms * characters.len() as u128)
-                    / speed_ms / speed_ms) as usize;
+                let index = (time_since_then % (speed_ms * characters.chars().count() as u128)
+                    / speed_ms) as usize;
                 characters.chars().nth(index).unwrap_or('!')
             }
         }
