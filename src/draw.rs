@@ -1,16 +1,18 @@
 use crate::{
     chain::{Chain, ChainLink},
+    config::GlyphList,
     element::{BasicElement, ElementType},
     error::EASHError,
-    misc_types::{Alignment, Width},
-    evaluate::{tokenize, TokenType},
+    evaluate::{TokenType, tokenize},
+    misc_types::{Alignment, Glyph, Width},
 };
 
 use crossterm::{
     cursor::MoveToColumn,
     queue,
     style::{
-        Print, PrintStyledContent, ResetColor, SetBackgroundColor, SetForegroundColor, Stylize, Color as ctColor
+        Color as ctColor, Print, PrintStyledContent, ResetColor, SetBackgroundColor,
+        SetForegroundColor, Stylize,
     },
     terminal::{Clear, ClearType},
 };
@@ -32,17 +34,17 @@ pub fn pad_string(original: String, size: u16, aligment: &Alignment) -> (String,
         Alignment::Left => {
             start = 0;
             end = s.len();
-            s = format!("{}{}", s, " ".repeat(difference as usize));
+            s = format!("{}{}", s, " ".repeat(difference));
         }
         Alignment::Center => {
             let l = difference / 2;
             let r = difference - l;
-            s = format!("{}{}{}", " ".repeat(l as usize), s, "".repeat(r as usize));
+            s = format!("{}{}{}", " ".repeat(l), s, "".repeat(r));
             start = l;
             end = s.len() - r;
         }
         Alignment::Right => {
-            s = format!("{}{}", " ".repeat(difference as usize), s);
+            s = format!("{}{}", " ".repeat(difference), s);
             start = difference;
             end = s.len();
         }
@@ -60,13 +62,23 @@ pub fn draw_flat_basic_element<W: Write>(
     let mut print = &content[0..];
     // cut the string off if its behind the first terminal character
     if item.mass.position.round() < 0.0 {
-        let difference = item.mass.position.round().abs() as u16;
+        let difference = item.mass.position.round().abs() as usize;
         // don't print the string
-        if difference >= print.len() as u16 {
+        if difference >= print.len() {
             return Ok(());
         }
-
-        print = &content[difference as usize..];
+        // TODO)) looks horrifically inefficient, pls efficientize this
+        let chardif = print
+            .char_indices()
+            .enumerate()
+            .find_map(|(i, (ci, _))| {
+                if i == difference {
+                    return Some(ci);
+                }
+                None
+            })
+            .unwrap();
+        (_, print) = content.split_at(chardif);
     }
 
     let styled = print
@@ -74,14 +86,15 @@ pub fn draw_flat_basic_element<W: Write>(
         .with(e.visual_state.color.to_flat_color()?)
         .on(e.visual_state.bg_color.to_flat_color()?);
     queue!(w, PrintStyledContent(styled))?;
-    return Ok(());
+    Ok(())
 }
 
 // we need it to be mutable to set the width property on mass
 // TODO)) split this function up
-pub fn draw<'a, W: Write + Send>(
+pub fn draw<W: Write + Send>(
     w: &mut W,
     elements: &mut MutexGuard<Chain>,
+    glyphs: &GlyphList,
 ) -> Result<(), EASHError> {
     _ = queue!(w, MoveToColumn(0), Clear(ClearType::CurrentLine));
 
@@ -93,11 +106,56 @@ pub fn draw<'a, W: Write + Send>(
         // draw each element based on its enum 😨😨😨
         match &item.element {
             ElementType::BasicElement(e) => {
+                // glyph logic!
+                let glyphed = if e.content.contains("@") {
+                    let mut processed = String::new();
+                    for (i, gl) in e.content.split('@').enumerate() {
+                        if i == 0 && !e.content.starts_with("@") {
+                            processed.push_str(gl);
+                            continue;
+                        }
+
+                        // wacky hack: if its empty, was probably a @@ so add an actual @ (:
+                        if gl.is_empty() {
+                            processed.push('@');
+                            continue;
+                        } else if gl.starts_with(' ') {
+                            processed.push(' ');
+                            continue;
+                        }
+
+                        // greedy search: get longest possible string that matches this
+                        // in the future we shouldnt even need to process this during rendering
+                        let mut longest_match: Option<(&Glyph, usize)> = None;
+                        for (cpos, _) in gl.char_indices() {
+                            if let Some(g) = glyphs.list.get(&gl[0..cpos + 1]) {
+                                longest_match = Some((g, cpos + 1));
+                            }
+                        }
+
+                        if let Some((glyph, split)) = longest_match {
+                            let (_, after) = gl.split_at(split);
+                            processed.push(glyph.get_current_glyph(&glyphs.instant));
+                            processed.push_str(after);
+                        } else {
+                            return Err(EASHError::UndefinedGlyph(gl.to_string()));
+                        }
+                    }
+                    Some(processed)
+                } else {
+                    None
+                };
+
+                let base = match &glyphed {
+                    Some(g) => g,
+                    None => &e.content,
+                };
+
                 // add spacing
                 let mut print = format!(
                     "{}{}{}",
                     " ".repeat(e.visual_state.padding as usize),
-                    e.content,
+                    base,
                     " ".repeat(e.visual_state.padding as usize)
                 );
 
@@ -129,15 +187,13 @@ pub fn draw<'a, W: Write + Send>(
                             let color = e
                                 .visual_state
                                 .color
-                                .to_color_for_char((i as usize - start / end) as f32);
+                                .to_color_for_char((i - start / end) as f32);
                             character = character.with(color)
                         }
 
                         if e.visual_state.bg_color.is_gradient() {
-                            character = character.on(e
-                                .visual_state
-                                .color
-                                .to_color_for_char((i as usize / end) as f32))
+                            character = character
+                                .on(e.visual_state.color.to_color_for_char((i / end) as f32))
                         }
 
                         queue!(w, PrintStyledContent(character))?;
@@ -155,7 +211,7 @@ pub fn draw<'a, W: Write + Send>(
                 } else {
                     continue;
                 }
-                cursor_position = item.mass.position.round() as u16 + lock.cursor_position.clone();
+                cursor_position = item.mass.position.round() as u16 + lock.cursor_position;
                 queue!(w, ResetColor)?;
 
                 let tokens = tokenize(&lock.prompt);
@@ -168,7 +224,7 @@ pub fn draw<'a, W: Write + Send>(
                 for token in tokens {
                     // temporary logic....
                     let color = match token.contents {
-                        TokenType::Value(_) => ctColor::Black,
+                        TokenType::Value(_) => ctColor::White,
                         TokenType::Flag(_) => ctColor::Red,
                         TokenType::Directory(_) => ctColor::Yellow,
                         TokenType::String(_) => ctColor::Green,
@@ -180,15 +236,15 @@ pub fn draw<'a, W: Write + Send>(
                 }
 
                 let mut color_index = 0;
-                let (_, first_color) = colors.get(0).unwrap();
+                let (_, first_color) = colors.first().unwrap();
                 queue!(w, SetForegroundColor(*first_color))?;
                 for (position, character) in lock.prompt.chars().enumerate() {
                     let color = colors.get(color_index + 1);
-                    if let Some((ni, nc)) = color {
-                        if *ni == position {
-                            queue!(w, SetForegroundColor(*nc))?;
-                            color_index += 1;
-                        }
+                    if let Some((ni, nc)) = color
+                        && *ni == position
+                    {
+                        queue!(w, SetForegroundColor(*nc))?;
+                        color_index += 1;
                     }
 
                     queue!(w, Print(character))?;

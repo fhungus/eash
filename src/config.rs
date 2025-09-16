@@ -1,14 +1,21 @@
 use crate::{
     element::{BasicElement, ElementType},
     error::EASHError,
-    misc_types::{Alignment, Color, HexColor, Spring, VisualState, Width},
+    misc_types::{Alignment, Color, Glyph, HexColor, Spring, VisualState, Width},
 };
-use serde::Deserialize;
-use std::{fs, str::FromStr};
+use serde::{
+    Deserialize,
+    de::{Error as ValueError, Visitor},
+};
+use std::{collections::HashMap, fs, str::FromStr, time::Instant};
 
 #[derive(Deserialize)]
 pub struct Config {
+    #[serde(default)]
     pub chain_elements: Vec<ConfigElement>,
+    #[serde(default)]
+    pub glyphs: GlyphList,
+    #[serde(default)]
     pub spring: SpringConfig,
 }
 
@@ -20,6 +27,16 @@ pub struct SpringConfig {
     pub dampening: f32,
 }
 
+impl Default for SpringConfig {
+    fn default() -> Self {
+        SpringConfig {
+            spacing: 1,
+            constant: 3.0,
+            dampening: 0.7,
+        }
+    }
+}
+
 // feels superfluous...
 impl From<SpringConfig> for Spring {
     fn from(sc: SpringConfig) -> Spring {
@@ -28,6 +45,117 @@ impl From<SpringConfig> for Spring {
             constant: sc.constant,
             dampening: sc.dampening,
         }
+    }
+}
+
+// One Nonoctillion lines of Serde Boilerplate... 👇
+struct GlyphValueWalker {}
+impl<'a> Visitor<'a> for GlyphValueWalker {
+    type Value = Glyph;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("(string of animated glyph, time between glyph changes) | a string | just one character")?;
+        Ok(())
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        if v.len() == 1 {
+            let out = Glyph::Single(v.chars().next().unwrap_or('!'));
+            Ok(out)
+        } else if v.len() >= 2 {
+            // default value!
+            let out = Glyph::Animated {
+                characters: v.to_string(),
+                speed: 0.25,
+            };
+            Ok(out)
+        } else {
+            Err(E::invalid_length(0, &self))
+        }
+    }
+
+    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+    where
+        A: serde::de::SeqAccess<'a>,
+    {
+        // seq should consist of 2 objects, a string for the glyphs and a number for the timing...
+        // 4 unwraps!! oh my goodness gracious!
+        let ch = seq
+            .next_element()?
+            .ok_or_else(|| A::Error::invalid_length(0, &self))?;
+        let seconds = seq
+            .next_element()?
+            .ok_or_else(|| A::Error::invalid_length(0, &self))?;
+
+        Ok(Glyph::Animated {
+            characters: ch,
+            speed: seconds,
+        })
+    }
+}
+
+impl<'de> Deserialize<'de> for Glyph {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        // bye bye "Postcard and many others." i will miss you 💔
+        deserializer.deserialize_any(GlyphValueWalker {})
+    }
+}
+
+struct GlyphMapWalker {}
+impl<'a> Visitor<'a> for GlyphMapWalker {
+    type Value = HashMap<String, Glyph>;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("i must get my Glyphs ((glyph: (string of animated glyph, time between glyph changes)) | a string | just one character)... or wrath will be caused.")?;
+        std::fmt::Result::Ok(())
+    }
+
+    fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+    where
+        A: serde::de::MapAccess<'a>,
+    {
+        let mut values = HashMap::new();
+        while let Some((k, v)) = map.next_entry()? {
+            let name: String = k;
+            let glyph: Glyph = v;
+            values.insert(name, glyph);
+        }
+
+        Ok(values)
+    }
+}
+
+// i am so sorry for this in particular
+pub struct GlyphList {
+    pub instant: std::time::Instant, // we just need ONE instant man... just to use as a reference! its gotten during config deserialization which is cursed but that SHOULDN'T matter.
+    pub list: HashMap<String, Glyph>,
+}
+
+impl Default for GlyphList {
+    fn default() -> Self {
+        Self {
+            // TODO)) have this NOT be initialized when we don't need it.
+            instant: Instant::now(),
+            list: HashMap::new(),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for GlyphList {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Ok(GlyphList {
+            instant: Instant::now(),
+            list: deserializer.deserialize_map(GlyphMapWalker {})?,
+        })
     }
 }
 
@@ -155,10 +283,10 @@ impl TryFrom<ConfigVisualState> for VisualState {
 }
 
 pub fn find_config() -> Result<Option<String>, EASHError> {
-    let config_dirs = vec![
+    let config_dirs = [
         "./eash.toml",
         "./eash/eash.toml",
-        "!/eash/eash.toml", // ! is a standin for the xdg_config_home env variable if it exists
+        "!/eash/eash.toml", // the ! is a standin for the xdg_config_home env variable if it exists
         "!/eash.toml",
     ];
 
@@ -174,7 +302,7 @@ pub fn find_config() -> Result<Option<String>, EASHError> {
             let xdg_config_dir = ambatuborrow.clone().unwrap();
 
             path = xdg_config_dir.to_string();
-            path.push_str(&i[1..]);
+            path.push_str(i.strip_prefix("!").unwrap());
         } else {
             path = i.to_string();
         }
@@ -208,5 +336,5 @@ pub fn get_elements_from_config(config: &Config) -> Result<Vec<ElementType>, EAS
         }
     }
 
-    return Ok(elements);
+    Ok(elements)
 }

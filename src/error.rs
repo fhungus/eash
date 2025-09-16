@@ -8,6 +8,7 @@ pub enum EASHError {
     ConfigMalformedBracket(String),
     ConfigInvalidType { expected: &'static str, got: String },
     ConfigPromptUsed,
+    UndefinedGlyph(String),
 }
 
 impl From<std::io::Error> for EASHError {
