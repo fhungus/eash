@@ -11,13 +11,12 @@ pub struct Command {
 
 }
 
-impl TryFrom<Vec<Token>> for Command {
-    type Error = EASHError;
+// impl TryFrom<Vec<Token>> for Command {
+//     type Error = EASHError;
 
-
-    fn try_from(tokens: Vec<Token>) -> Result<Self, Self::Error> {
-    }
-}
+//     fn try_from(tokens: Vec<Token>) -> Result<Self, Self::Error> {
+//     }
+// }
 
 pub struct Child {
     inner: PChild,

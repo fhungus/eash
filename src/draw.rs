@@ -5,16 +5,12 @@ use crate::{
     error::EASHError,
     evaluate::{TokenType, tokenize},
     misc_types::{Alignment, Glyph, Width},
-    evaluate::{TokenType, tokenize},
-    misc_types::{Alignment, Width},
 };
 
 use crossterm::{
     cursor::MoveToColumn,
     queue,
     style::{
-        Color as ctColor, Print, PrintStyledContent, ResetColor, SetBackgroundColor,
-        SetForegroundColor, Stylize,
         Color as ctColor, Print, PrintStyledContent, ResetColor, SetBackgroundColor,
         SetForegroundColor, Stylize,
     },
@@ -142,7 +138,7 @@ pub fn draw<W: Write + Send>(
                             processed.push(glyph.get_current_glyph(&glyphs.instant));
                             processed.push_str(after);
                         } else {
-                            return Err(EASHError::UndefinedGlyph(gl.to_string()));
+                            return Err(EASHError::ConfigInvalidGlyph(gl.to_string()));
                         }
                     }
                     Some(processed)
@@ -234,7 +230,6 @@ pub fn draw<W: Write + Send>(
                         TokenType::String(_) => ctColor::Green,
                         TokenType::AndThen => ctColor::Magenta,
                         TokenType::Pipe => ctColor::Cyan,
-                        TokenType::Nonsense(_) => ctColor::DarkRed,
                     };
                     colors.push((token.start, color));
                 }
@@ -244,11 +239,11 @@ pub fn draw<W: Write + Send>(
                 queue!(w, SetForegroundColor(*first_color))?;
                 for (position, character) in lock.prompt.chars().enumerate() {
                     let color = colors.get(color_index + 1);
-                    if let Some((ni, nc)) = color
-                        && *ni == position
-                    {
-                        queue!(w, SetForegroundColor(*nc))?;
-                        color_index += 1;
+                    if let Some((ni, nc)) = color {
+                        if *ni == position { 
+                            queue!(w, SetForegroundColor(*nc))?;
+                            color_index += 1;
+                        }
                     }
 
                     queue!(w, Print(character))?;

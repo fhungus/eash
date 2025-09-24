@@ -1,5 +1,7 @@
-// tiny ass trinkets for parsing a syntax that is unfortunately oderous of sh
-#[derive(PartialEq, Debug)]
+use crate::error::EASHError;
+
+// NOTICE: i really want to replace ALL of this code with a competent and actually usable syntax so just like wait ig
+#[derive(PartialEq, Debug, Clone)]
 pub enum TokenType {
     Value(String),
     String(String),
@@ -7,7 +9,6 @@ pub enum TokenType {
     Flag(String),
     AndThen,
     Pipe,
-    Nonsense(String),
 }
 
 impl TokenType {
@@ -185,34 +186,32 @@ pub fn tokenize(s: &str) -> Vec<Token> {
 
 struct TreeCommand {
     program_path: String,
-    flags: Vec<(String, String)>,
+    flags: Vec<(String, Option<String>)>,
     values: Vec<String>,
     pipe: bool, // will pipe this command to the next if it should (|) and not if it shouldnt (&& / nothing i guess)
     next: Option<Box<TreeCommand>>
 }
 
-fn new_treecommand_with_token(t: &Token) -> Result<TreeCommand, EASHUncomfortable> {
-
-
-    if let Some(s) = treeable {
+fn new_treecommand_with_token(t: &Token) -> Result<TreeCommand, EASHError> {
+    if let Some(s) = t.contents.not_a_symbol() {
         return Ok(
             TreeCommand {
                 // im cloning up a STORM!!!
                 program_path: s.clone(),
-                flags: Vec::new(), 
-                values: Vec::new(), 
-                pipe: false, 
-                next: None 
+                flags: Vec::new(),
+                values: Vec::new(),
+                pipe: false,
+                next: None
             })
     }  else {
-        return Err(EASHUncomfortable::CommandStartedWithoutProgram(t.clone()));
+        return Err(EASHError::CommandStartedWithoutProgram(t.clone()));
     }
 }
 
-fn to_ast(tokens: &Vec<Token>) -> Result<TreeCommand, EASHUncomfortable> {
-    let commands: Vec<TreeCommand> = Vec::new();
+fn to_ast(tokens: &Vec<Token>) -> Result<Vec<TreeCommand>, EASHError> {
+    let mut commands: Vec<TreeCommand> = Vec::new();
     let mut processing: Option<TreeCommand> = None;
-    let tokens_iter = tokens.iter().peekable();
+    let mut tokens_iter = tokens.iter().peekable();
     loop {
         let t = match tokens_iter.next() {
             Some(t) => t,
@@ -220,7 +219,7 @@ fn to_ast(tokens: &Vec<Token>) -> Result<TreeCommand, EASHUncomfortable> {
                 break
             },
         };
-        match processing {
+        match &mut processing {
             None => {
                 processing = Some(new_treecommand_with_token(t)?);
             },
@@ -230,25 +229,35 @@ fn to_ast(tokens: &Vec<Token>) -> Result<TreeCommand, EASHUncomfortable> {
                         let after = tokens_iter.peek();
                         match after {
                             None => {
-
+                                // assume it's an empty flag
+                                p.flags.push((s.clone(), None));
                             },
                             Some(t2) => {
-                                
+                                if let Some(s2) = t2.contents.not_a_symbol() {
+                                    p.flags.push((s.clone(), Some(s2.clone())));
+                                } else {
+                                    p.flags.push((s.clone(), None)); // PLEASEE... how do i collapse this!!!
+                                }
                             }
                         }
                     },
-                    TokenType::Directory(s) => {
+                    TokenType::Value(s) | TokenType::String(s) | TokenType::Directory(s) => {
                         p.values.push(s.clone());
                     },
-                    TokenType::String(s) => {
-                        p.values.push(s.clone());
-                    }
+                    TokenType::AndThen => {
+                        commands.push(processing.unwrap()); // if you do a && | the program will explode....
+                        processing = None;
+                    },
+                    TokenType::Pipe => {
+                        commands.push(processing.unwrap());
+                        processing = None;
+                    },
                 }
             }
         }
     }
 
-    return tokens
+    Ok(commands)
 }
 
 #[cfg(test)]
