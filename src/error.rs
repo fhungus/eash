@@ -16,6 +16,7 @@ pub enum EASHError {
 #[derive(Debug)]
 pub enum EASHUncomfortable { // non-fatal error
     CommandStartedWithoutProgram(Token),
+    UndefinedGlyph(String),
 }
 
 impl From<std::io::Error> for EASHError {

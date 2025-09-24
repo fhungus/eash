@@ -1,9 +1,5 @@
 // tiny ass trinkets for parsing a syntax that is unfortunately oderous of sh
-use std::{collections::HashMap, process::{Command, CommandArgs}, thread::current};
-
-use crate::error::{EASHError, EASHUncomfortable};
-
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug)]
 pub enum TokenType {
     Value(String),
     String(String),
@@ -15,8 +11,8 @@ pub enum TokenType {
 }
 
 impl TokenType {
-    fn not_a_symbol {
-        match &t.contents {
+    pub fn not_a_symbol(&self) -> Option<&String> {
+        match self {
             TokenType::Directory(s) => Some(s),
             TokenType::String(s) => Some(s),
             TokenType::Value(s) => Some(s),
@@ -43,36 +39,30 @@ enum ConsumptionMode {
 
 fn looks_like_directory(s: &str) -> bool {
     // TODO)) find cases where this doesn't work and make them work!!!
-    if s.starts_with(".") || s.contains("/") || s.starts_with("~") {
-        return true;
-    } else {
-        return false;
-    }
+    s.starts_with(".") || s.contains("/") || s.starts_with("~")
 }
 
-fn str_to_token(s: &str, mode: &ConsumptionMode, start: usize, end: usize) -> Token {
+fn str_to_token(s: &str, mode: &ConsumptionMode, st: usize, en: usize) -> Token {
     let content = s.to_string();
     let token_type = match mode {
         ConsumptionMode::Default | ConsumptionMode::String(_) => {
             if looks_like_directory(s) {
                 TokenType::Directory(content)
+            } else if let ConsumptionMode::String(_) = mode {
+                TokenType::String(content)
             } else {
-                if let ConsumptionMode::String(_) = mode {
-                    TokenType::String(content)
-                } else {
-                    TokenType::Value(content)
-                }
+                TokenType::Value(content)
             }
         }
         ConsumptionMode::Flag => TokenType::Flag(s.to_string()),
         ConsumptionMode::DoubleFlag => TokenType::Flag(s.to_string()),
     };
 
-    return Token {
-        start: start,
-        end: end,
+    Token {
+        start: st,
+        end: en,
         contents: token_type,
-    };
+    }
 }
 
 // notice: i aint got no langdev experience pls hold the tomatoes
@@ -84,7 +74,7 @@ pub fn tokenize(s: &str) -> Vec<Token> {
     let mut current_token_start = 0;
 
     let mut mode = ConsumptionMode::Default;
-    let mut chars = s.chars().enumerate().peekable().into_iter();
+    let mut chars = s.chars().enumerate().peekable();
     loop {
         let c;
         let pos;
@@ -136,7 +126,6 @@ pub fn tokenize(s: &str) -> Vec<Token> {
                         push_token(&mode, &mut current_token, pos);
                         mode = ConsumptionMode::Default;
                         continue;
-                    } else {
                     }
                 } else {
                     mode = ConsumptionMode::String(c);
@@ -191,7 +180,7 @@ pub fn tokenize(s: &str) -> Vec<Token> {
         ));
     }
 
-    return tokens;
+    tokens
 }
 
 struct TreeCommand {
@@ -201,8 +190,6 @@ struct TreeCommand {
     pipe: bool, // will pipe this command to the next if it should (|) and not if it shouldnt (&& / nothing i guess)
     next: Option<Box<TreeCommand>>
 }
-
-fn 
 
 fn new_treecommand_with_token(t: &Token) -> Result<TreeCommand, EASHUncomfortable> {
 

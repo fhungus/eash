@@ -36,7 +36,7 @@ pub fn calculate_force(chain: &Chain, link_index: usize) -> f32 {
 
     force -= chain.spring.dampening * link.mass.velocity;
 
-    return force;
+    force
 }
 
 pub fn step_links(chain: &mut MutexGuard<Chain>, dt: f32) {
@@ -45,15 +45,12 @@ pub fn step_links(chain: &mut MutexGuard<Chain>, dt: f32) {
 
     // calculate extra forces and such
     let mut extra_forces = vec![0.0; n];
-    for i in 0..n {
-        extra_forces[i] = calculate_force(chain, i) / chain.links.get(i).unwrap().mass.mass;
+    for (i, force) in extra_forces.iter_mut().enumerate() {
+        *force = calculate_force(chain, i) / chain.links.get(i).unwrap().mass.mass;
     }
 
-    for i in 0..n {
-        let link = chain.links.get_mut(i).unwrap();
-
-        link.mass.position =
-            link.mass.position + (link.mass.velocity * dt + 0.5 * extra_forces[i] * dt * dt);
+    for (i, link) in chain.links.iter_mut().enumerate() {
+        link.mass.position += link.mass.velocity * dt + 0.5 * extra_forces[i] * dt * dt;
 
         link.mass.velocity += extra_forces[i];
     }
@@ -74,5 +71,5 @@ pub struct ChainLink {
 // ignoring the right element until we have to anchor shit to the right
 // also its kind of annoying that we have to define the generic despite not touching it at all
 fn calculate_spring_distance(spacing: u16, l: &ChainLink) -> u16 {
-    return l.mass.width + spacing; // good enough
+    l.mass.width + spacing // good enough
 }

@@ -1,8 +1,8 @@
-use std::time::{Duration, Instant};
-
-use crate::error::EASHError;
+use std::time::Instant;
 use crossterm::style::Color as ctColor;
 use serde::Deserialize;
+
+use crate::error::EASHError;
 
 pub enum Direction {
     Left,
@@ -24,10 +24,7 @@ pub enum Color {
 
 impl Color {
     pub fn is_gradient(&self) -> bool {
-        match self {
-            Self::Gradient(_, _) => true,
-            _ => false,
-        }
+        matches!(self, Self::Gradient(_, _))
     }
 
     pub fn to_color_for_char(&self, distance: f32) -> ctColor {
@@ -54,32 +51,6 @@ impl Color {
                 b: c.b,
             }),
             Self::Transparent => Ok(ctColor::Reset),
-        }
-    }
-}
-
-pub enum Glyph {
-    Single(char),
-    Animated {
-        glyphs: Vec<char>, 
-        delay: f32 // in seconds
-    }
-}
-
-impl Glyph {
-    pub fn get_current_glyph_state(&self, start: Instant) -> &char {
-        match self {
-            Glyph::Single(c) => {return c},
-            Glyph::Animated { glyphs, delay } => {
-                if glyphs.is_empty() { return &'!' ;}
-                let chrono_length = glyphs.len() as f32 * delay;
-                // might be some inconsistency here due to floating points
-                let since_start = start.elapsed().as_millis() as f32 * 0.001;
-                // TODO)) modulos are probably pretty computationally expensive so uhh.. maybe dont?
-                let index = ((since_start % chrono_length) / delay).floor() as usize;
-
-                return glyphs.get(index).or(Some(&'😭')).unwrap();
-            }
         }
     }
 }
@@ -117,6 +88,36 @@ pub enum Width {
     Minimum(u32),
 }
 
+#[derive(Debug)]
+pub enum Glyph {
+    Single(char),
+    Animated {
+        characters: String,
+        speed: f32, // in seconds
+    },
+}
+
+impl Glyph {
+    pub fn get_current_glyph(&self, then: &Instant) -> char {
+        match self {
+            Glyph::Single(c) => *c,
+            Glyph::Animated { characters, speed } => {
+                // probably could do this with less computation tbh
+                let time_since_then = then.elapsed().as_millis();
+                let speed_ms: u128;
+                unsafe {
+                    // is there a better way to do this? please?
+                    speed_ms = (speed * 1000.0).floor().to_int_unchecked();
+                };
+                
+                let index = (time_since_then % (speed_ms * characters.chars().count() as u128)
+                    / speed_ms) as usize;
+                characters.chars().nth(index).unwrap_or('!')
+            }
+        }
+    }
+}
+
 pub enum TriggerType {
     EveryFrame,
     PromptUpdate,
@@ -133,7 +134,7 @@ pub struct VisualState {
 
 impl Default for VisualState {
     fn default() -> Self {
-        return Self {
+        Self {
             align: Alignment::Left,
             color: Color::Solid(HexColor {
                 r: 255,
@@ -143,6 +144,6 @@ impl Default for VisualState {
             padding: 1,
             bg_color: Color::Transparent,
             width: Width::Minimum(0),
-        };
+        }
     }
 }

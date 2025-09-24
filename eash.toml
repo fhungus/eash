@@ -1,14 +1,29 @@
 [[chain_elements]]
 type = "BasicElement"
-content = "good enough ig"
+content = "element number @@ @loading"
 [chain_elements.visual_state]
-align = "Right"
+align = "Left"
 width = "Minimum(25)"
 padding = 2
-bg_color = {type = "Solid", r = 25, g = 25, b = 25}
+bg_color = {type = "Solid", r = 195, g = 125, b = 125}
+color = {type = "Solid", r = 25, g = 15, b = 15}
+
+[[chain_elements]]
+type = "BasicElement"
+content = "element number 2"
+[chain_elements.visual_state]
+align = "Left"
+width = "Minimum(5)"
+padding = 2
+bg_color = {type = "Solid", r = 56, g = 90, b = 90}
 color = {type = "Solid", r = 255, g = 255, b = 255}
+
+[glyphs]
+numbers = ["0123456789", 0.25]
+loading = ["⠏⠧⠶⠼⠹⠛", 0.1]
+schiz = ["😄😃😐🥲😭🐱😢🥰😙🙁🙂", 1]
 
 [spring]
 spacing = 1
-constant = 6
-dampening = 0.3
+constant = 1
+dampening = 0.075

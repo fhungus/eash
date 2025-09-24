@@ -1,19 +1,10 @@
 use crate::misc_types::Direction;
 
+#[derive(Default)]
 pub struct Prompt {
     pub prompt: String,
     pub cursor_position: u16,
     pub selection_start: Option<u16>, // if None, then there is no selection
-}
-
-impl Default for Prompt {
-    fn default() -> Self {
-        Self {
-            prompt: String::new(),
-            cursor_position: 0,
-            selection_start: None,
-        }
-    }
 }
 
 impl Prompt {
@@ -36,27 +27,43 @@ impl Prompt {
     }
 
     pub fn find_skippable_in_direction(&self, direction: Direction) -> u16 {
-        let increment = match direction {
-            Direction::Left => -1,
-            Direction::Right => 1,
+        let (l, r) = self
+            .prompt
+            .split_at_checked(self.cursor_position as usize)
+            .unwrap();
+        match direction {
+            Direction::Left => {
+                let mut iter = l.chars().rev().enumerate();
+                _ = iter.next();
+                for (i, c) in iter {
+                    // check if THIS character is "skippable", if it is, set cursor_pos and return here
+                    match c {
+                        '/' | ' ' | '.' | ',' | '\'' | '"' => {
+                            return self.cursor_position - (i as u16);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            Direction::Right => {
+                let mut iter = r.chars().enumerate();
+                _ = iter.next();
+                for (i, c) in iter {
+                    // same thing.. duplication... ):
+                    match c {
+                        '/' | ' ' | '.' | ',' | '\'' | '"' => {
+                            return i as u16 + self.cursor_position;
+                        }
+                        _ => {}
+                    }
+                }
+            }
         };
 
-        let mut i = self.cursor_position as i16;
-        loop {
-            i = i + increment;
-            if i <= 0 || self.prompt.len() <= 0 {
-                return 0;
-            } else if i >= self.prompt.len() as i16 {
-                return self.prompt.len() as u16;
-            }
-
-            // check if THIS character is "skippable", if it is, set cursor_pos and return here
-            // TODO)) make this part support utf16, mostly just in case i need it in the future
-            // TODO)) (also) do this just generally better
-            let bytes = self.prompt.as_bytes()[(i - 1) as usize];
-            if ' ' as u8 == bytes || '/' as u8 == bytes || '=' as u8 == bytes {
-                return i as u16;
-            }
+        // failed to find anything so return the start/end of the prompt
+        match direction {
+            Direction::Left => 0,
+            Direction::Right => self.prompt.len() as u16,
         }
     }
 
@@ -79,7 +86,7 @@ impl Prompt {
         self.prompt = format!("{}{}", left_side, right_side);
         self.cursor_position = cut_position;
 
-        return false;
+        false
     }
 
     // move the cursor in the direction, space times
@@ -116,7 +123,7 @@ impl Prompt {
             self.move_cursor(1, direction);
         }
 
-        return prev == self.cursor_position;
+        prev == self.cursor_position
     }
 
     // insert a character at the cursors current position
@@ -135,7 +142,7 @@ impl Prompt {
     // delete character at cursor position
     // returns whether to "bump" or not
     pub fn delete_character(&mut self) -> bool {
-        if self.prompt.len() == 0 || self.cursor_position <= 0 {
+        if self.prompt.is_empty() || self.cursor_position == 0 {
             return true;
         }
 
@@ -149,7 +156,7 @@ impl Prompt {
             self.cursor_position -= 1;
         }
 
-        return false;
+        false
     }
 
     // delete whatever is selected at the current moment (will panic if there is no selection)
@@ -185,7 +192,7 @@ impl Prompt {
         self.cursor_position = (smaller - 1) as u16;
         self.prompt = format!("{}{}", first, second);
 
-        return bump;
+        bump
     }
 
     // handles all backspace logic
@@ -195,12 +202,12 @@ impl Prompt {
             return self.delete_selection();
         }
 
-        if self.cursor_position <= 0 {
+        if self.cursor_position == 0 {
             return true;
         }
 
         self.delete_character();
 
-        return false;
+        false
     }
 }
